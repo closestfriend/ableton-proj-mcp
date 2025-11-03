@@ -1,5 +1,10 @@
 # Music Project Manager MCP
 
+[![GitHub stars](https://img.shields.io/github/stars/closestfriend/ableton-proj-mcp?style=social)](https://github.com/closestfriend/ableton-proj-mcp)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![MCP](https://img.shields.io/badge/MCP-1.0-green.svg)](https://modelcontextprotocol.io)
+
 A Model Context Protocol (MCP) server for safely scanning and analyzing Ableton Live projects.
 
 ## Features
