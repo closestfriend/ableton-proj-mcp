@@ -5,13 +5,15 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![MCP](https://img.shields.io/badge/MCP-1.0-green.svg)](https://modelcontextprotocol.io)
 
-A Model Context Protocol (MCP) server for safely scanning and analyzing Ableton Live projects.
+A Model Context Protocol (MCP) server that gives Claude deep insight into your Ableton Live projects. More than just a file scanner - it's an intelligent music project analyst that helps you make creative decisions.
 
 ## Features
 
 - 🔍 **Safe Scanning**: Built-in limits prevent scanning massive directories
-- 📊 **Project Analysis**: Extract BPM, track counts, and metadata
-- 🕒 **Recent Projects**: Find what you've been working on lately
+- 📊 **Deep Analysis**: Extract BPM, track counts, plugin usage, and metadata
+- 🎛️ **Plugin Detection**: Discover which VST/AU plugins are used in each project
+- 🕒 **Smart Discovery**: Find recent projects or search by musical characteristics
+- 🧠 **AI-Powered Insights**: Claude can interpret data to answer creative questions
 - ⚡ **Fast**: Only analyzes what you ask for
 
 ## Safety Features
@@ -49,20 +51,49 @@ A Model Context Protocol (MCP) server for safely scanning and analyzing Ableton 
 
 ## Usage
 
-Once installed, you can ask Claude things like:
+This isn't just a file scanner - Claude can answer **creative and analytical questions** about your music projects:
 
+### Creative Decision-Making
+- "Which of my unfinished projects has the most potential?"
+- "Find projects similar to [project name] based on BPM and plugin usage"
+- "Analyze my last 10 projects and suggest which one to finish based on complexity"
+- "What's my typical project structure? (average tracks, common BPMs)"
+
+### Plugin Intelligence
+- "Which projects use Serum?"
+- "Show me all projects that use [specific plugin]"
+- "What are my most-used plugins across all projects?"
+- "Find projects with more than 5 different plugins"
+- "Which projects only use stock Ableton devices?"
+
+### Workflow Analysis
+- "Find my most complex project from the last month"
+- "Show me small projects (< 5MB) I haven't touched in a while"
+- "Group my projects by BPM ranges (120-130, 130-140, etc.)"
+- "Find all projects with more than 10 MIDI tracks"
+
+### Basic Queries
 - "Scan my Ableton projects in ~/Music/Ableton"
 - "What are my 5 most recent projects?"
-- "Analyze these specific projects and show me their BPM and track counts"
+- "Show me projects modified this week"
 
-### Example Commands
+### How It Works
 
 ```
-You: Show me my recent music projects in ~/Music/Ableton
-Claude: [calls find_recent tool]
+You: Find all my projects that use Serum and have a BPM around 140
 
-You: Analyze the top 3 and tell me which one I should finish
-Claude: [calls analyze_projects with those paths]
+Claude: Let me scan your projects and analyze them...
+[calls find_recent or scan_projects]
+[calls analyze_projects on the results]
+[filters and interprets the data]
+
+Claude: I found 8 projects using Serum. Here are the 3 with BPM closest to 140:
+1. "Dark Techno Idea" - 138 BPM, 7 Serum instances
+2. "Bass Experiment" - 142 BPM, 3 Serum instances
+3. "Club Track Draft" - 140 BPM, 5 Serum instances
+
+Based on the track counts and plugin usage, "Dark Techno Idea" looks
+most developed and might be worth finishing first.
 ```
 
 ## Tools Available
@@ -72,21 +103,32 @@ Scans a directory for all .als files and returns basic info (name, date, size).
 
 **Input**: `directory` (string) - Path to scan
 
+**Output**: List of projects with filename, folder, last modified date, and size
+
 **Safety**: Stops at 100 files, skips large files, limited depth
 
 ### `analyze_projects`
-Deep analysis of specific projects to extract BPM, track counts, etc.
+Deep analysis of specific projects to extract detailed musical information.
 
 **Input**: `project_paths` (array of strings) - Paths from scan results
+
+**Output**: For each project:
+- BPM (tempo)
+- Track counts (total, audio, MIDI)
+- Plugin inventory (VST3/AU/VST2)
+- Plugin instance counts
+- File metadata
 
 **Safety**: Max 20 projects per call
 
 ### `find_recent`
 Quick way to find recently modified projects.
 
-**Input**: 
+**Input**:
 - `directory` (string) - Path to scan
 - `limit` (integer, optional) - Number to return (default: 10)
+
+**Output**: List of most recently modified projects, sorted by date
 
 ## Configuration
 
@@ -112,17 +154,28 @@ SCAN_DEPTH = 3           # Go deeper into folders
 
 - Ableton .als files are gzipped XML
 - Analysis requires temporary file extraction
+- Plugin detection works with VST3, AU (Audio Units), and VST2 formats
+- Extracts data from the LiveSet XML structure
 - Only works with files accessible to Claude Desktop
 - Temp files are always cleaned up, even on error
 
-## Next Steps
+## What Can Be Analyzed
 
-Future enhancements could include:
+**Currently Supported:**
+- ✅ BPM/Tempo
+- ✅ Track counts (Audio, MIDI, Total)
+- ✅ Plugin names and types (VST3/AU/VST2)
+- ✅ Plugin instance counts
+- ✅ File metadata (size, modification date)
+
+**Potential Future Enhancements:**
+- Missing plugin detection (compare against installed plugins)
+- Effects chain order and routing
 - Completion score estimation
-- Plugin/sample inventory
-- Project comparison
-- Direct Ableton integration
-- Export to JSON for other tools
+- Sample file inventory
+- Project comparison tools
+- Export to JSON for external tools
+- Clip and automation analysis
 
 ---
 
