@@ -41,6 +41,8 @@ class SafeAbletonProject:
         self.track_count = 0
         self.audio_tracks = 0
         self.midi_tracks = 0
+        self.plugins = []  # List of plugin names (VST/AU)
+        self.plugin_count = 0
         self.error = None
         
     def analyze(self):
@@ -87,9 +89,12 @@ class SafeAbletonProject:
             self.audio_tracks = len(audio_tracks)
             self.midi_tracks = len(midi_tracks)
             self.track_count = self.audio_tracks + self.midi_tracks
-            
+
+            # Extract plugins (VST3 and AU)
+            self._extract_plugins(root)
+
             return True
-            
+
         finally:
             # Clean up temp file
             if temp_file and os.path.exists(temp_file):
@@ -97,6 +102,38 @@ class SafeAbletonProject:
                     os.unlink(temp_file)
                 except:
                     pass
+
+    def _extract_plugins(self, root):
+        """Extract plugin names from the XML"""
+        plugin_devices = root.findall(".//PluginDevice")
+        plugins_found = []
+
+        for device in plugin_devices:
+            # Try VST3 plugin name
+            vst3_name = device.find(".//PluginDesc/Vst3PluginInfo/Name")
+            if vst3_name is not None:
+                name = vst3_name.get("Value")
+                if name:
+                    plugins_found.append(("VST3", name))
+                    continue
+
+            # Try AU plugin name
+            au_name = device.find(".//PluginDesc/AuPluginInfo/Name")
+            if au_name is not None:
+                name = au_name.get("Value")
+                if name:
+                    plugins_found.append(("AU", name))
+                    continue
+
+            # Try VST2 plugin name
+            vst2_name = device.find(".//PluginDesc/VstPluginInfo/PluginName")
+            if vst2_name is not None:
+                name = vst2_name.get("Value")
+                if name:
+                    plugins_found.append(("VST2", name))
+
+        self.plugins = plugins_found
+        self.plugin_count = len(plugins_found)
 
 def safe_scan_directory(root_path, max_files=MAX_FILES_TO_SCAN, max_depth=SCAN_DEPTH):
     """Safely scan for .als files with limits"""
@@ -254,6 +291,17 @@ async def call_tool(name: str, arguments: dict):
                 if proj.bpm:
                     result_lines.append(f"   BPM: {proj.bpm}")
                 result_lines.append(f"   Tracks: {proj.track_count} ({proj.audio_tracks} audio, {proj.midi_tracks} MIDI)")
+
+                # Show plugins if found
+                if proj.plugin_count > 0:
+                    result_lines.append(f"   Plugins: {proj.plugin_count} third-party")
+                    # Show unique plugin list
+                    unique_plugins = {}
+                    for plugin_type, plugin_name in proj.plugins:
+                        if plugin_name not in unique_plugins:
+                            unique_plugins[plugin_name] = plugin_type
+                    for plugin_name, plugin_type in unique_plugins.items():
+                        result_lines.append(f"      • {plugin_name} ({plugin_type})")
             else:
                 result_lines.append(f"   ⚠️  Analysis failed: {proj.error}")
         
