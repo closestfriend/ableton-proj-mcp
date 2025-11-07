@@ -25,27 +25,34 @@ A Model Context Protocol (MCP) server that gives Claude deep insight into your A
 
 ## Installation
 
-1. **Install MCP Python SDK**:
+1. **Ensure you have `uv` installed**:
    ```bash
-   pip install mcp
+   # Install uv if you don't have it
+   curl -LsSf https://astral.sh/uv/install.sh | sh
    ```
 
 2. **Add to Claude Desktop Config**:
-   
+
    Open `~/Library/Application Support/Claude/claude_desktop_config.json` and add:
-   
+
    ```json
    {
      "mcpServers": {
        "music-manager": {
-         "command": "python3",
-         "args": ["/absolute/path/to/ableton-proj-mcp/music_mcp.py"]
+         "command": "uv",
+         "args": [
+           "tool",
+           "run",
+           "--from",
+           "/absolute/path/to/ableton-proj-mcp",
+           "music-manager-mcp"
+         ]
        }
      }
    }
    ```
 
-   Replace `/absolute/path/to/` with your actual path to where you cloned this repo.
+   Replace `/absolute/path/to/ableton-proj-mcp` with your actual path to where you cloned this repo.
 
 3. **Restart Claude Desktop**
 
