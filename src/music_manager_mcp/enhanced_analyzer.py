@@ -221,18 +221,49 @@ class EnhancedAbletonAnalyzer:
     
     def _extract_device_name(self, device_elem) -> Optional[str]:
         """Extract device name from various device types"""
+        # Comprehensive list of stock Ableton Live devices
+        STOCK_DEVICES = [
+            'Eq8', 'EqEight', 'ChannelEq', 'Compressor2', 'Limiter', 'Saturator',
+            'GlueCompressor', 'MultibandDynamics', 'Gate', 'Reverb', 'Delay',
+            'AutoFilter', 'AutoPan', 'Chorus', 'Flanger', 'Phaser', 'Erosion',
+            'Redux', 'Vinyl', 'BeatRepeat', 'Looper', 'PitchLoop59', 'Resonator',
+            'FrequencyShifter', 'RingMod', 'Vocoder', 'Amp', 'Cabinet', 'Pedal',
+            'DrumBuss', 'Utility', 'SpectrumAnalyzer', 'Tuner',
+            'OriginalSimpler', 'OriginalSampler', 'Operator', 'Analog', 'Collision',
+            'Electric', 'Tension', 'LoungeLizard', 'StringStudio', 'InstrumentVector',
+            'DrumGroupDevice', 'InstrumentGroupDevice', 'AudioEffectGroupDevice',
+            'MidiEffectGroupDevice'
+        ]
+
         # Try built-in Ableton device
         for child in device_elem:
-            if child.tag in ['Eq8', 'Compressor2', 'Limiter', 'Saturator', 'GlueCompressor']:
+            if child.tag in STOCK_DEVICES:
                 return child.tag
-                
-        # Try plugin device
+
+        # Try plugin device - check VST3/VST/AU info structures
         plugin_desc = device_elem.find('.//PluginDesc')
         if plugin_desc is not None:
-            plugin_name = plugin_desc.find('.//PluginName')
-            if plugin_name is not None and 'Value' in plugin_name.attrib:
-                return plugin_name.attrib['Value']
-                
+            # Check VST3
+            vst3_info = plugin_desc.find('.//Vst3PluginInfo')
+            if vst3_info is not None:
+                name_elem = vst3_info.find('Name')  # Direct child
+                if name_elem is not None and name_elem.attrib.get('Value'):
+                    return name_elem.attrib['Value']
+
+            # Check VST2
+            vst_info = plugin_desc.find('.//VstPluginInfo')
+            if vst_info is not None:
+                name_elem = vst_info.find('PlugName')  # Direct child
+                if name_elem is not None and name_elem.attrib.get('Value'):
+                    return name_elem.attrib['Value']
+
+            # Check AU
+            au_info = plugin_desc.find('.//AuPluginInfo')
+            if au_info is not None:
+                name_elem = au_info.find('Name')  # Direct child
+                if name_elem is not None and name_elem.attrib.get('Value'):
+                    return name_elem.attrib['Value']
+
         return None
     
     def _get_track_devices(self, track_elem) -> List[str]:
@@ -280,23 +311,44 @@ class EnhancedAbletonAnalyzer:
         for device in self.xml_root.findall('.//PluginDevice'):
             plugin_desc = device.find('.//PluginDesc')
             if plugin_desc is not None:
-                name_elem = plugin_desc.find('.//PluginName')
-                if name_elem is not None:
-                    name = name_elem.attrib.get('Value', 'Unknown')
-                    
-                    # Determine plugin type
-                    device_type = 'VST'  # Default
-                    if plugin_desc.find('.//VstPluginInfo') is not None:
+                # Plugin name is stored inside VST3/VST/AU PluginInfo elements
+                name = None
+                device_type = 'Unknown'
+
+                # Check for VST3 plugins
+                vst3_info = plugin_desc.find('.//Vst3PluginInfo')
+                if vst3_info is not None:
+                    name_elem = vst3_info.find('Name')  # Direct child, not descendant
+                    if name_elem is not None and name_elem.attrib.get('Value'):
+                        name = name_elem.attrib.get('Value')
+                    device_type = 'VST3'
+
+                # Check for VST2 plugins
+                if name is None:
+                    vst_info = plugin_desc.find('.//VstPluginInfo')
+                    if vst_info is not None:
+                        name_elem = vst_info.find('PlugName')  # Direct child
+                        if name_elem is not None and name_elem.attrib.get('Value'):
+                            name = name_elem.attrib.get('Value')
                         device_type = 'VST'
-                    elif plugin_desc.find('.//AuPluginInfo') is not None:
+
+                # Check for AU (Audio Units) plugins
+                if name is None:
+                    au_info = plugin_desc.find('.//AuPluginInfo')
+                    if au_info is not None:
+                        name_elem = au_info.find('Name')  # Direct child
+                        if name_elem is not None and name_elem.attrib.get('Value'):
+                            name = name_elem.attrib.get('Value')
                         device_type = 'AU'
-                    
+
+                # If we found a plugin name, add it
+                if name is not None:
                     # Check if active
                     is_active = True
-                    on_elem = device.find('.//On')
+                    on_elem = device.find('.//On/Manual')
                     if on_elem is not None and 'Value' in on_elem.attrib:
                         is_active = on_elem.attrib['Value'] == 'true'
-                    
+
                     plugins.append(PluginInfo(
                         name=name,
                         device_type=device_type,
@@ -357,12 +409,31 @@ class EnhancedAbletonAnalyzer:
     
     def _get_builtin_devices(self) -> List[str]:
         """List all Ableton built-in devices used"""
-        builtin = ['Eq8', 'Compressor2', 'Saturator', 'GlueCompressor', 
-                   'Limiter', 'Reverb', 'Delay', 'AutoFilter']
+        # Comprehensive list of stock Ableton Live devices
+        builtin = [
+            # Audio Effects
+            'Eq8', 'EqEight', 'ChannelEq', 'Compressor2', 'Limiter', 'Saturator',
+            'GlueCompressor', 'MultibandDynamics', 'Gate', 'Reverb', 'Delay',
+            'AutoFilter', 'AutoPan', 'Chorus', 'Flanger', 'Phaser', 'Erosion',
+            'Redux', 'Vinyl', 'BeatRepeat', 'Looper', 'PitchLoop59', 'Resonator',
+            'FrequencyShifter', 'RingMod', 'Vocoder', 'Amp', 'Cabinet', 'Pedal',
+            'DrumBuss', 'Utility', 'SpectrumAnalyzer', 'Tuner',
+
+            # Instruments
+            'OriginalSimpler', 'OriginalSampler', 'Operator', 'Analog', 'Collision',
+            'Electric', 'Tension', 'LoungeLizard', 'StringStudio', 'InstrumentVector',
+
+            # Container devices
+            'DrumGroupDevice', 'InstrumentGroupDevice', 'AudioEffectGroupDevice',
+            'MidiEffectGroupDevice'
+        ]
+
         found = []
         for device_name in builtin:
-            if self.xml_root.find(f'.//{device_name}') is not None:
-                found.append(device_name)
+            count = len(self.xml_root.findall(f'.//{device_name}'))
+            if count > 0:
+                # Add each instance (so if there are 3 EQ8s, add 3 times)
+                found.extend([device_name] * count)
         return found
     
     def _get_third_party_plugins(self) -> List[str]:

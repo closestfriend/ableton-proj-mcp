@@ -246,9 +246,33 @@ Note: This is a heuristic, not perfect. Your workflow may differ.""",
                     },
                     "required": ["directory"]
                 }
+            ),
+            types.Tool(
+                name="find_missing_samples",
+                description="""Scan projects for missing audio samples/files.
+
+Returns: JSON with projects that have missing samples, showing which samples are missing and the total count.
+
+Use cases:
+- "Do I have missing samples in my projects?"
+- Checking project integrity before sharing/archiving
+- Finding broken file references after moving projects
+- Identifying which samples need to be collected
+
+Note: Only checks if the file path exists, doesn't verify file integrity.""",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "directory": {
+                            "type": "string",
+                            "description": "Directory to scan for projects with missing samples"
+                        }
+                    },
+                    "required": ["directory"]
+                }
             )
         ])
-    
+
     return tools
 
 @server.call_tool()
@@ -282,7 +306,10 @@ async def call_tool(name: str, arguments: dict):
         
     elif name == "find_finished_projects" and ENHANCED_MODE:
         return await find_finished_projects(arguments.get("directory"))
-    
+
+    elif name == "find_missing_samples" and ENHANCED_MODE:
+        return await find_missing_samples(arguments.get("directory"))
+
     return [types.TextContent(
         type="text",
         text=f"Unknown tool or tool not available: {name}"
@@ -416,9 +443,10 @@ async def analyze_projects(project_paths: List[str]):
                     'total_clips': analysis.total_clips
                 },
                 'master_chain': analysis.master_chain,
-                'plugins': {
-                    'third_party': analysis.third_party_plugins,
-                    'heavy_count': analysis.heavy_plugin_count,
+                'devices': {
+                    'stock_ableton': analysis.builtin_devices,
+                    'third_party_vsts': analysis.third_party_plugins,
+                    'heavy_cpu_count': analysis.heavy_plugin_count,
                     'missing': analysis.missing_plugins
                 },
                 'completion': {
@@ -805,6 +833,58 @@ async def find_finished_projects(directory: str):
     return [types.TextContent(
         type="text",
         text="\n".join(result_lines)
+    )]
+
+async def find_missing_samples(directory: str):
+    """Find projects with missing audio samples"""
+    if not ENHANCED_MODE:
+        return [types.TextContent(
+            type="text",
+            text="Enhanced analyzer not available. Cannot detect missing samples."
+        )]
+
+    # Scan all projects
+    projects = []
+    for root, _, files in os.walk(directory):
+        depth = root[len(directory):].count(os.sep)
+        if depth > SCAN_DEPTH:
+            continue
+        for file in files:
+            if file.endswith('.als'):
+                projects.append(os.path.join(root, file))
+
+    projects_with_issues = []
+    total_missing = 0
+
+    for path in projects[:MAX_FILES_TO_SCAN]:
+        try:
+            analyzer = EnhancedAbletonAnalyzer(path)
+            analysis = analyzer.analyze()
+
+            if analysis.missing_samples:
+                projects_with_issues.append({
+                    'name': os.path.basename(path),
+                    'path': path,
+                    'missing_count': len(analysis.missing_samples),
+                    'missing_samples': analysis.missing_samples[:10],  # First 10
+                    'total_samples': len(analysis.sample_paths)
+                })
+                total_missing += len(analysis.missing_samples)
+
+        except Exception as e:
+            continue
+
+    # Build response
+    result = {
+        "success": True,
+        "summary": f"Scanned {len(projects[:MAX_FILES_TO_SCAN])} projects, found {len(projects_with_issues)} with missing samples",
+        "total_missing_samples": total_missing,
+        "projects_with_issues": projects_with_issues
+    }
+
+    return [types.TextContent(
+        type="text",
+        text=json.dumps(result, indent=2)
     )]
 
 def main():
