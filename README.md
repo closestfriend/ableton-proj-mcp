@@ -23,22 +23,22 @@ This tool allows Claude (the AI assistant) to read and analyze your Ableton Live
 ## What Problems Does This Solve?
 
 **Missing Sample Recovery:**
-This is the killer feature. When you open a project with missing samples, Ableton just shows "File not found." This tool extracts the complete file paths from your project XML, then (paired with the filesystem MCP) Claude can search your drives and locate the samples even if they've been renamed or moved. Get structured JSON output with every missing file path, making batch recovery or relinking trivial.
+Extracts complete file paths from project XML. Paired with the filesystem MCP, Claude can search your drives and locate samples even if they've been renamed or moved. Structured JSON output includes every missing file path, making batch recovery or relinking straightforward.
 
-**Plugin Inventory Without Opening Projects:**
-Need to know which projects use a specific VST before moving to a new computer? Want to find all projects that only use stock devices so they're safe to share? This extracts complete plugin lists (VST3/VST2/AU) with instance counts - no more opening 50 projects one by one.
+**Plugin Inventory:**
+Extracts complete plugin lists (VST3/VST2/AU) with instance counts from project files without opening Ableton. Useful for system migrations, checking project portability, or locating projects that use specific plugins.
 
 **BPM and Technical Metadata:**
-Find all 140 BPM tracks. Locate projects with specific track counts. Filter by arrangement length. Get automation lane counts. All without launching Ableton. The structured JSON output means you can pipe this into your own scripts or spreadsheets.
+Query projects by BPM, track count, arrangement length, or automation lane count without opening Ableton. Structured JSON output suitable for scripting or spreadsheet analysis.
 
 **Duplicate Detection by Content:**
-File browsers only compare names. This compares actual project *content* - track structure, device chains, MIDI patterns - to find duplicates even when filenames differ. Perfect for cleaning up endless "Project v2", "Project FINAL", "Project FINAL2" versions.
+Compares project content (track structure, device chains, MIDI patterns) rather than filenames. Identifies duplicate projects regardless of naming scheme.
 
 **Master Chain Analysis:**
-Extract and compare mastering chains across projects. See which projects share the same master processing. Identify your go-to mastering setups. Export chain configurations for documentation.
+Extracts and compares mastering device chains across projects. Groups projects by shared master processing.
 
 **Natural Language + Structured Data:**
-The real power: ask "find my 140 BPM projects with Serum that have missing samples", get JSON with file paths, then use filesystem MCP to actually locate and fix the samples. Or export to CSV. Or feed into your DAW template generator. The combination of conversational interface and machine-readable output unlocks workflows that traditional tools can't touch.
+Conversational queries return structured JSON. Example: "find my 140 BPM projects with Serum that have missing samples" returns JSON with file paths. Export to CSV, pipe into scripts, or use filesystem MCP for file operations. Combines natural language interface with machine-readable output.
 
 ## Installation
 
