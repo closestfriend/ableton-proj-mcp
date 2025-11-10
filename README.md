@@ -20,16 +20,31 @@ This tool allows Claude (the AI assistant) to read and analyze your Ableton Live
 
 **Recommended:** Pair this with the [filesystem MCP server](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem) for the best experience in Claude Desktop. The filesystem server lets Claude browse your directories and locate project files, which it can then analyze using this tool. This combination enables natural conversations like "find my recent projects and analyze the ones with the most plugins."
 
-## Features
+## What Problems Does This Solve?
 
-- **Project Scanning**: Recursively scan directories for .als files with configurable safety limits
-- **Deep Analysis**: Extract BPM, track counts, arrangement structure, automation, and markers
-- **Device Detection**: Identify and categorize stock Ableton devices vs third-party VST/AU plugins
-- **Plugin Analysis**: Detect VST3, VST2, and AU plugins with instance counts
-- **Sample Integrity**: Check for missing audio file references
-- **Duplicate Detection**: Compare projects by content similarity
-- **Master Chain Analysis**: Extract and compare mastering device chains
-- **Project Classification**: Heuristic-based identification of finished vs sketch projects
+Traditional file browsers show you *filenames and dates*. This tool lets you ask questions in natural language about what's *inside* your projects:
+
+**Creative Decision Making:**
+- "Which of my unfinished projects from the last month has the most potential?" - Claude can analyze track counts, arrangement length, and complexity to help you decide what to work on
+- "Find projects similar to [track name] in style and BPM" - Discover forgotten projects that match your current vibe
+- "What's my typical workflow?" - Understand patterns in how you structure projects
+
+**Plugin Management:**
+- "Which projects use Serum?" - Instantly locate all projects using specific plugins without opening them
+- "Show me projects that only use stock Ableton devices" - Find projects safe to share or move to another system
+- "Do I have any projects with missing plugins?" - Identify compatibility issues before opening projects
+
+**Project Organization:**
+- "Find duplicate or similar versions of the same project" - Clean up your library by finding alternate saves and iterations
+- "Which projects are actually finished vs just ideas?" - Automatic classification based on arrangement structure and mastering chains
+- "Show me projects with broken sample references" - Fix missing audio files before they become a problem
+
+**Technical Queries:**
+- "Find all 140 BPM projects with heavy CPU usage" - Locate resource-intensive projects
+- "Compare the mastering chains across my last 5 finished tracks" - Identify your mastering patterns
+- "Which project has the most automation?" - Find your most detailed productions
+
+The power comes from combining structured data extraction with Claude's ability to understand context, compare projects, and answer follow-up questions conversationally.
 
 ## Installation
 
