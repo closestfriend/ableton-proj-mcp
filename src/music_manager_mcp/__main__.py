@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
 Enhanced Music Project Manager MCP
-Now with FULL detective capabilities! ✨
-Hunter can see EVERYTHING inside .als files!
+Comprehensive analysis of Ableton Live project files.
 """
 
 from mcp.server import Server
@@ -397,7 +396,7 @@ async def scan_projects(directory: str):
         )]
 
 async def analyze_projects(project_paths: List[str]):
-    """Deep analysis with our enhanced analyzer! ✨"""
+    """Deep analysis with enhanced analyzer"""
 
     if not ENHANCED_MODE:
         # Fallback to basic analysis
@@ -509,7 +508,7 @@ async def basic_analyze_projects(project_paths: List[str]):
             result_lines.append(f"\n❌ Not found: {path}")
             continue
             
-        result_lines.append(f"\n📊 {os.path.basename(path)}")
+        result_lines.append(f"\n{os.path.basename(path)}")
         result_lines.append(f"   Size: {round(os.path.getsize(path) / (1024 * 1024), 2)}MB")
         result_lines.append(f"   Last modified: {datetime.datetime.fromtimestamp(os.path.getmtime(path)).strftime('%Y-%m-%d')}")
     
@@ -654,7 +653,7 @@ async def find_duplicates(directory: str, threshold: float = 80):
                 })
     
     result_lines = [
-        f"🔍 Duplicate Detection Results (threshold: {threshold}%)\n",
+        f"Duplicate Detection Results (threshold: {threshold}%)\n",
         f"Scanned: {len(analyzed)} projects\n",
         f"Duplicates found: {len(duplicates)}\n",
         "=" * 60
@@ -709,10 +708,10 @@ async def find_missing_plugins(directory: str):
             continue
     
     result_lines = [
-        f"🔌 Plugin Analysis\n",
+        f"Plugin Analysis\n",
         f"Total unique plugins: {len(all_plugins)}\n",
         "=" * 60,
-        "\n📋 All Third-Party Plugins Found:"
+        "\nAll Third-Party Plugins Found:"
     ]
     
     for plugin in sorted(all_plugins)[:20]:  # Show first 20
@@ -749,13 +748,13 @@ async def analyze_master_chains(project_paths: List[str]):
             continue
     
     result_lines = [
-        f"🎛️ Master Chain Analysis\n",
+        f"Master Chain Analysis\n",
         f"Unique chains: {len(chains)}\n",
         "=" * 60
     ]
     
     for chain, projects in chains.items():
-        result_lines.append(f"\n📊 Chain: {chain}")
+        result_lines.append(f"\nChain: {chain}")
         result_lines.append(f"   Used in {len(projects)} project{'s' if len(projects) > 1 else ''}:")
         for proj in projects[:5]:  # Show first 5
             result_lines.append(f"     • {proj}")
@@ -807,7 +806,7 @@ async def find_finished_projects(directory: str):
             continue
     
     result_lines = [
-        f"✅ Project Completion Analysis\n",
+        f"Project Completion Analysis\n",
         f"Total scanned: {len(finished) + len(sketches)}\n",
         f"Likely finished: {len(finished)}\n",
         f"Likely sketches: {len(sketches)}\n",
@@ -815,15 +814,15 @@ async def find_finished_projects(directory: str):
     ]
     
     if finished:
-        result_lines.append("\n🏁 Likely Finished Projects:")
+        result_lines.append("\nLikely Finished Projects:")
         for proj in finished[:10]:
             result_lines.append(
                 f"   • {proj['name']}\n"
                 f"     {proj['bars']} bars, {proj['markers']} markers, {proj['track_count']} tracks"
             )
-    
+
     if sketches:
-        result_lines.append("\n🎨 Likely Sketches/Ideas:")
+        result_lines.append("\nLikely Sketches/Ideas:")
         for proj in sketches[:10]:
             result_lines.append(
                 f"   • {proj['name']}\n"
