@@ -22,29 +22,23 @@ This tool allows Claude (the AI assistant) to read and analyze your Ableton Live
 
 ## What Problems Does This Solve?
 
-Traditional file browsers show you *filenames and dates*. This tool lets you ask questions in natural language about what's *inside* your projects:
+**Missing Sample Recovery:**
+This is the killer feature. When you open a project with missing samples, Ableton just shows "File not found." This tool extracts the complete file paths from your project XML, then (paired with the filesystem MCP) Claude can search your drives and locate the samples even if they've been renamed or moved. Get structured JSON output with every missing file path, making batch recovery or relinking trivial.
 
-**Creative Decision Making:**
-- "Which of my unfinished projects from the last month has the most potential?" - Claude can analyze track counts, arrangement length, and complexity to help you decide what to work on
-- "Find projects similar to [track name] in style and BPM" - Discover forgotten projects that match your current vibe
-- "What's my typical workflow?" - Understand patterns in how you structure projects
+**Plugin Inventory Without Opening Projects:**
+Need to know which projects use a specific VST before moving to a new computer? Want to find all projects that only use stock devices so they're safe to share? This extracts complete plugin lists (VST3/VST2/AU) with instance counts - no more opening 50 projects one by one.
 
-**Plugin Management:**
-- "Which projects use Serum?" - Instantly locate all projects using specific plugins without opening them
-- "Show me projects that only use stock Ableton devices" - Find projects safe to share or move to another system
-- "Do I have any projects with missing plugins?" - Identify compatibility issues before opening projects
+**BPM and Technical Metadata:**
+Find all 140 BPM tracks. Locate projects with specific track counts. Filter by arrangement length. Get automation lane counts. All without launching Ableton. The structured JSON output means you can pipe this into your own scripts or spreadsheets.
 
-**Project Organization:**
-- "Find duplicate or similar versions of the same project" - Clean up your library by finding alternate saves and iterations
-- "Which projects are actually finished vs just ideas?" - Automatic classification based on arrangement structure and mastering chains
-- "Show me projects with broken sample references" - Fix missing audio files before they become a problem
+**Duplicate Detection by Content:**
+File browsers only compare names. This compares actual project *content* - track structure, device chains, MIDI patterns - to find duplicates even when filenames differ. Perfect for cleaning up endless "Project v2", "Project FINAL", "Project FINAL2" versions.
 
-**Technical Queries:**
-- "Find all 140 BPM projects with heavy CPU usage" - Locate resource-intensive projects
-- "Compare the mastering chains across my last 5 finished tracks" - Identify your mastering patterns
-- "Which project has the most automation?" - Find your most detailed productions
+**Master Chain Analysis:**
+Extract and compare mastering chains across projects. See which projects share the same master processing. Identify your go-to mastering setups. Export chain configurations for documentation.
 
-The power comes from combining structured data extraction with Claude's ability to understand context, compare projects, and answer follow-up questions conversationally.
+**Natural Language + Structured Data:**
+The real power: ask "find my 140 BPM projects with Serum that have missing samples", get JSON with file paths, then use filesystem MCP to actually locate and fix the samples. Or export to CSV. Or feed into your DAW template generator. The combination of conversational interface and machine-readable output unlocks workflows that traditional tools can't touch.
 
 ## Installation
 
