@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Enhanced Ableton Project Analyzer
-Deep XML inspection for the detective features Hunter wants! ✨
+Deep XML inspection for comprehensive project analysis.
 """
 
 import gzip
@@ -43,7 +43,7 @@ class ProjectStructure:
     audio_tracks: int
     midi_tracks: int
     
-    # NEW DETECTIVE FEATURES! ✨
+    # Enhanced analysis features
     # Track details
     tracks: List[TrackInfo]
     master_chain: List[str]
@@ -102,7 +102,7 @@ class EnhancedAbletonAnalyzer:
             # Step 1: Decompress and parse XML
             self._load_xml()
             
-            # Step 2: Extract EVERYTHING! ✨
+            # Step 2: Extract all project data
             structure = ProjectStructure(
                 filepath=str(self.filepath),
                 bpm=self._get_bpm(),
@@ -505,7 +505,7 @@ class EnhancedAbletonAnalyzer:
 def compare_projects(proj1: ProjectStructure, proj2: ProjectStructure) -> Dict:
     """
     Compare two projects to detect if they're duplicates
-    Returns similarity metrics! ✨
+    Returns similarity metrics.
     """
     return {
         'same_structure_hash': proj1.content_hash == proj2.content_hash,
