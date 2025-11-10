@@ -18,6 +18,8 @@ This tool allows Claude (the AI assistant) to read and analyze your Ableton Live
 
 **What are .als files?** These are Ableton Live Set files (the main project files you open in Ableton). This tool reads these files to extract information without opening Ableton.
 
+**Recommended:** Pair this with the [filesystem MCP server](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem) for the best experience in Claude Desktop. The filesystem server lets Claude browse your directories and locate project files, which it can then analyze using this tool. This combination enables natural conversations like "find my recent projects and analyze the ones with the most plugins."
+
 ## Features
 
 - **Project Scanning**: Recursively scan directories for .als files with configurable safety limits
