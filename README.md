@@ -1,194 +1,255 @@
-# Music Project Manager MCP
+# Ableton Project MCP Server
 
 [![GitHub stars](https://img.shields.io/github/stars/closestfriend/ableton-proj-mcp?style=social)](https://github.com/closestfriend/ableton-proj-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![MCP](https://img.shields.io/badge/MCP-1.0-green.svg)](https://modelcontextprotocol.io)
 
-A Model Context Protocol (MCP) server that gives Claude deep insight into your Ableton Live projects. More than just a file scanner - it's an intelligent music project analyst that helps you make creative decisions.
+Model Context Protocol (MCP) server for analyzing Ableton Live project files. Provides Claude with the ability to extract and analyze project metadata, including BPM, track structure, plugin usage, device chains, and sample integrity.
 
 ## Features
 
-- 🔍 **Safe Scanning**: Built-in limits prevent scanning massive directories
-- 📊 **Deep Analysis**: Extract BPM, track counts, plugin usage, and metadata
-- 🎛️ **Plugin Detection**: Discover which VST/AU plugins are used in each project
-- 🕒 **Smart Discovery**: Find recent projects or search by musical characteristics
-- 🧠 **AI-Powered Insights**: Claude can interpret data to answer creative questions
-- ⚡ **Fast**: Only analyzes what you ask for
-
-## Safety Features
-
-- **File Limit**: Stops after 100 .als files (configurable)
-- **Size Limit**: Skips files over 50MB (configurable)
-- **Depth Limit**: Only scans 3 folders deep (configurable)
-- **Smart Skipping**: Ignores common heavy folders (Backup, Samples, Library, etc.)
+- **Project Scanning**: Recursively scan directories for .als files with configurable safety limits
+- **Deep Analysis**: Extract BPM, track counts, arrangement structure, automation, and markers
+- **Device Detection**: Identify and categorize stock Ableton devices vs third-party VST/AU plugins
+- **Plugin Analysis**: Detect VST3, VST2, and AU plugins with instance counts
+- **Sample Integrity**: Check for missing audio file references
+- **Duplicate Detection**: Compare projects by content similarity
+- **Master Chain Analysis**: Extract and compare mastering device chains
+- **Project Classification**: Heuristic-based identification of finished vs sketch projects
 
 ## Installation
 
-1. **Ensure you have `uv` installed**:
-   ```bash
-   # Install uv if you don't have it
-   curl -LsSf https://astral.sh/uv/install.sh | sh
-   ```
+### Prerequisites
 
-2. **Add to Claude Desktop Config**:
-
-   Open `~/Library/Application Support/Claude/claude_desktop_config.json` and add:
-
-   ```json
-   {
-     "mcpServers": {
-       "music-manager": {
-         "command": "uv",
-         "args": [
-           "tool",
-           "run",
-           "--from",
-           "/absolute/path/to/ableton-proj-mcp",
-           "music-manager-mcp"
-         ]
-       }
-     }
-   }
-   ```
-
-   Replace `/absolute/path/to/ableton-proj-mcp` with your actual path to where you cloned this repo.
-
-3. **Restart Claude Desktop**
-
-## Usage
-
-This isn't just a file scanner - Claude can answer **creative and analytical questions** about your music projects:
-
-### Creative Decision-Making
-- "Which of my unfinished projects has the most potential?"
-- "Find projects similar to [project name] based on BPM and plugin usage"
-- "Analyze my last 10 projects and suggest which one to finish based on complexity"
-- "What's my typical project structure? (average tracks, common BPMs)"
-
-### Plugin Intelligence
-- "Which projects use Serum?"
-- "Show me all projects that use [specific plugin]"
-- "What are my most-used plugins across all projects?"
-- "Find projects with more than 5 different plugins"
-- "Which projects only use stock Ableton devices?"
-
-### Workflow Analysis
-- "Find my most complex project from the last month"
-- "Show me small projects (< 5MB) I haven't touched in a while"
-- "Group my projects by BPM ranges (120-130, 130-140, etc.)"
-- "Find all projects with more than 10 MIDI tracks"
-
-### Basic Queries
-- "Scan my Ableton projects in ~/Music/Ableton"
-- "What are my 5 most recent projects?"
-- "Show me projects modified this week"
-
-### How It Works
-
-```
-You: Find all my projects that use Serum and have a BPM around 140
-
-Claude: Let me scan your projects and analyze them...
-[calls find_recent or scan_projects]
-[calls analyze_projects on the results]
-[filters and interprets the data]
-
-Claude: I found 8 projects using Serum. Here are the 3 with BPM closest to 140:
-1. "Dark Techno Idea" - 138 BPM, 7 Serum instances
-2. "Bass Experiment" - 142 BPM, 3 Serum instances
-3. "Club Track Draft" - 140 BPM, 5 Serum instances
-
-Based on the track counts and plugin usage, "Dark Techno Idea" looks
-most developed and might be worth finishing first.
+Install `uv` package manager:
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-## Tools Available
+### Configuration
 
-### `scan_projects`
-Scans a directory for all .als files and returns basic info (name, date, size).
+Add to Claude Desktop configuration file (`~/Library/Application Support/Claude/claude_desktop_config.json`):
 
-**Input**: `directory` (string) - Path to scan
+```json
+{
+  "mcpServers": {
+    "music-manager": {
+      "command": "uv",
+      "args": [
+        "tool",
+        "run",
+        "--from",
+        "/absolute/path/to/ableton-proj-mcp",
+        "music-manager-mcp"
+      ]
+    }
+  }
+}
+```
 
-**Output**: List of projects with filename, folder, last modified date, and size
+Replace `/absolute/path/to/ableton-proj-mcp` with the repository path.
 
-**Safety**: Stops at 100 files, skips large files, limited depth
+Restart Claude Desktop to load the server.
 
-### `analyze_projects`
-Deep analysis of specific projects to extract detailed musical information.
+## Available Tools
 
-**Input**: `project_paths` (array of strings) - Paths from scan results
+### Core Tools
 
-**Output**: For each project:
-- BPM (tempo)
-- Track counts (total, audio, MIDI)
-- Plugin inventory (VST3/AU/VST2)
-- Plugin instance counts
-- File metadata
+#### `scan_projects`
+Scan directory for .als files and return basic metadata.
 
-**Safety**: Max 20 projects per call
+**Input:**
+- `directory` (string): Path to scan
 
-### `find_recent`
-Quick way to find recently modified projects.
+**Output:**
+- Project name, folder, size, modification date
+- Safety limits applied automatically
 
-**Input**:
-- `directory` (string) - Path to scan
-- `limit` (integer, optional) - Number to return (default: 10)
+**Safety Limits:**
+- Max 100 files (configurable via `MAX_FILES_TO_SCAN`)
+- Skip files > 50MB (configurable via `MAX_FILE_SIZE_MB`)
+- Max depth: 3 subdirectories (configurable via `SCAN_DEPTH`)
 
-**Output**: List of most recently modified projects, sorted by date
+#### `analyze_projects`
+Deep analysis of project files. Parses gzipped XML to extract comprehensive metadata.
+
+**Input:**
+- `project_paths` (array): List of absolute .als file paths
+
+**Output:**
+```json
+{
+  "basic_info": {
+    "bpm": 140.0,
+    "track_count": 15,
+    "audio_tracks": 6,
+    "midi_tracks": 9,
+    "frozen_tracks": 2
+  },
+  "structure": {
+    "arrangement_length_bars": 128,
+    "scene_count": 8,
+    "markers": ["INTRO", "DROP", "OUTRO"],
+    "automation_lanes": 24,
+    "total_clips": 45
+  },
+  "devices": {
+    "stock_ableton": ["Eq8", "Compressor2", "Reverb"],
+    "third_party_vsts": ["Serum 2", "OTT", "ShaperBox 3"],
+    "heavy_cpu_count": 3
+  },
+  "master_chain": ["Eq8", "GlueCompressor", "Limiter"],
+  "completion": {
+    "likely_finished": true,
+    "has_arrangement": true,
+    "has_master_chain": true
+  }
+}
+```
+
+**Supported Devices:**
+- Stock: All Ableton Live instruments, effects, and utility devices
+- VST3: Full name extraction from plugin metadata
+- VST2: Legacy plugin format support
+- AU: Audio Units (macOS)
+
+#### `find_recent`
+Find recently modified projects, sorted by modification time.
+
+**Input:**
+- `directory` (string): Path to scan
+- `limit` (integer, optional): Number of results (default: 10)
+
+**Output:** List of most recent projects with metadata
+
+### Enhanced Analysis Tools
+
+#### `find_duplicates`
+Content-based duplicate detection using structural hashing.
+
+**Similarity Factors:**
+- Track structure hash: 40%
+- Track count match: 15%
+- BPM match: 10%
+- Master chain match: 20%
+- MIDI pattern hash: 15%
+
+**Input:**
+- `directory` (string): Path to scan
+- `threshold` (number, optional): Similarity percentage (default: 80)
+
+#### `find_missing_plugins`
+Enumerate all third-party plugins used across projects.
+
+**Output:**
+- List of unique plugins found
+- Projects using each plugin
+- Note: Does not verify system installation
+
+#### `find_missing_samples`
+Scan projects for broken audio file references.
+
+**Input:**
+- `directory` (string): Path to scan
+
+**Output:**
+```json
+{
+  "projects_with_issues": [
+    {
+      "name": "project.als",
+      "missing_count": 5,
+      "total_samples": 20,
+      "missing_samples": ["/path/to/missing.wav"]
+    }
+  ],
+  "total_missing_samples": 142
+}
+```
+
+#### `analyze_master_chains`
+Extract and compare mastering device chains across projects.
+
+**Input:**
+- `project_paths` (array): List of .als file paths
+
+**Output:** Groups projects by unique master chain configurations
+
+#### `find_finished_projects`
+Classify projects as finished or sketches using heuristics.
+
+**Completion Indicators (requires 3+ for "finished"):**
+- Has 3+ arrangement markers
+- Has 2+ devices on master track
+- Arrangement length > 64 bars
+- Has 5+ session view scenes
+
+## Technical Details
+
+### File Format
+Ableton .als files are gzip-compressed XML documents. The server:
+1. Decompresses files using gzip
+2. Parses XML with ElementTree
+3. Extracts data from LiveSet structure
+4. Returns structured JSON
+
+### Device Detection
+Stock devices are identified by XML tag names. Third-party plugins are parsed from `PluginDevice` elements:
+- VST3: `Vst3PluginInfo/Name`
+- VST2: `VstPluginInfo/PlugName`
+- AU: `AuPluginInfo/Name`
+
+### Performance
+- Scans: ~100ms per project (metadata only)
+- Deep analysis: ~200-500ms per project (full XML parse)
+- Batch operations use safety limits to prevent timeouts
 
 ## Configuration
 
-Edit the constants at the top of `music_mcp.py`:
+Edit constants in `src/music_manager_mcp/__main__.py`:
 
 ```python
-MAX_FILES_TO_SCAN = 100  # Increase if you need more
-MAX_FILE_SIZE_MB = 50    # Raise if you have larger projects
-SCAN_DEPTH = 3           # Go deeper into folders
+MAX_FILES_TO_SCAN = 100  # Maximum files per scan
+MAX_FILE_SIZE_MB = 50    # Skip files larger than this
+SCAN_DEPTH = 3           # Maximum subdirectory depth
 ```
+
+## Supported Data
+
+**Extracted:**
+- BPM, track counts (audio/MIDI/frozen)
+- Arrangement length, scenes, markers
+- All devices (stock and third-party)
+- Master chain device order
+- Automation lane count
+- Clip count
+- Sample file references
+- Content hashes for duplicate detection
+
+**Not Currently Extracted:**
+- MIDI note data
+- Audio clip waveforms
+- Plugin parameter values
+- Routing/send configurations
+- Clip envelopes
 
 ## Troubleshooting
 
-**"Found 0 projects"**: Check the path is correct and contains .als files
+**No projects found:** Verify directory path and .als file presence
 
-**"Hit safety limit"**: Increase `MAX_FILES_TO_SCAN` or scan a more specific folder
+**Analysis timeout:** Reduce batch size or increase `MAX_FILES_TO_SCAN`
 
-**"File too large"**: Increase `MAX_FILE_SIZE_MB` or skip that project
+**Missing plugin names:** Ensure project is from Ableton Live 11+
 
-**"Analysis failed"**: File might be corrupted or from a very old/new Ableton version
-
-## Technical Notes
-
-- Ableton .als files are gzipped XML
-- Analysis requires temporary file extraction
-- Plugin detection works with VST3, AU (Audio Units), and VST2 formats
-- Extracts data from the LiveSet XML structure
-- Only works with files accessible to Claude Desktop
-- Temp files are always cleaned up, even on error
-
-## What Can Be Analyzed
-
-**Currently Supported:**
-- ✅ BPM/Tempo
-- ✅ Track counts (Audio, MIDI, Total)
-- ✅ Plugin names and types (VST3/AU/VST2)
-- ✅ Plugin instance counts
-- ✅ File metadata (size, modification date)
-
-**Potential Future Enhancements:**
-- Missing plugin detection (compare against installed plugins)
-- Effects chain order and routing
-- Completion score estimation
-- Sample file inventory
-- Project comparison tools
-- Export to JSON for external tools
-- Clip and automation analysis
-
----
+**Large file skipped:** Increase `MAX_FILE_SIZE_MB` or analyze individually
 
 ## Contributing
 
-Issues and pull requests welcome! This is my first MCP server, so feedback is appreciated.
+Pull requests welcome. Please ensure:
+- Code follows existing style
+- New features include tests
+- Documentation is updated
 
 ## License
 
