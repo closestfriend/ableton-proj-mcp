@@ -7,6 +7,17 @@
 
 Model Context Protocol (MCP) server for analyzing Ableton Live project files. Provides Claude with the ability to extract and analyze project metadata, including BPM, track structure, plugin usage, device chains, and sample integrity.
 
+## What is this?
+
+This tool allows Claude (the AI assistant) to read and analyze your Ableton Live project files. It works by:
+1. Installing a "server" (background helper) on your computer
+2. Connecting it to the Claude Desktop app
+3. Enabling Claude to answer questions like "Which of my projects use the most plugins?" or "Find my unfinished tracks"
+
+**Important:** Your project files stay on your computer. This tool reads them locally and gives Claude the information - nothing is uploaded to the cloud.
+
+**What are .als files?** These are Ableton Live Set files (the main project files you open in Ableton). This tool reads these files to extract information without opening Ableton.
+
 ## Features
 
 - **Project Scanning**: Recursively scan directories for .als files with configurable safety limits
@@ -22,10 +33,28 @@ Model Context Protocol (MCP) server for analyzing Ableton Live project files. Pr
 
 ### Prerequisites
 
-Install `uv` package manager:
+**System Requirements:**
+- macOS (tested on macOS 10.15+)
+- Claude Desktop app installed
+- Python 3.10 or higher (usually pre-installed on modern macOS)
+
+**To check your Python version:**
+1. Open Terminal (Applications → Utilities → Terminal)
+2. Type: `python3 --version`
+3. You should see "Python 3.10" or higher
+
+If you don't have Python 3.10+, download it from [python.org](https://www.python.org/downloads/)
+
+**Install uv package manager:**
+
+This tool requires `uv` - a modern Python package manager that handles all the technical dependencies automatically (you won't need to manage Python versions or packages yourself).
+
+Install `uv` by pasting this command into your Terminal:
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
+
+**Note for macOS users:** Terminal can be found in Applications → Utilities → Terminal
 
 ### Configuration
 
@@ -48,7 +77,23 @@ Add to Claude Desktop configuration file (`~/Library/Application Support/Claude/
 }
 ```
 
-Replace `/absolute/path/to/ableton-proj-mcp` with the repository path.
+**To find your installation path:**
+1. Open Terminal
+2. Navigate to where you downloaded/cloned this repository
+3. Type `pwd` and press Enter
+4. Copy the path that appears (e.g., `/Users/yourname/Downloads/ableton-proj-mcp`)
+5. Use this path in the configuration above
+
+**Example:** If `pwd` shows `/Users/jane/Projects/ableton-proj-mcp`, your config should be:
+```json
+"args": [
+  "tool",
+  "run",
+  "--from",
+  "/Users/jane/Projects/ableton-proj-mcp",
+  "music-manager-mcp"
+]
+```
 
 Restart Claude Desktop to load the server.
 

@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "music-manager": {
+      "command": "uv",
+      "args": [
+        "tool",
+        "run",
+        "--from",
+        "/absolute/path/to/ableton-proj-mcp",
+        "music-manager-mcp"
+      ]
+    }
+  }
+}
