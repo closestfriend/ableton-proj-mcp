@@ -1,0 +1,5 @@
+# Ableton Project Manager MCP Server
+# Dependencies for HuggingFace Spaces deployment
+
+gradio>=5.0.0
+mcp>=1.0.0
