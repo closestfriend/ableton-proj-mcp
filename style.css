@@ -1,0 +1,196 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&family=Space+Mono:wght@400;700&family=Cormorant+Garamond:wght@300;400&display=swap');
+
+.gradio-container {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+    background: linear-gradient(135deg, #e8e8e8 0%, #f5f5f5 100%) !important;
+}
+
+.header {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 2.5rem;
+    font-weight: 300;
+    letter-spacing: -0.02em;
+    color: #2a2a2a;
+    margin-bottom: 0.5rem;
+}
+
+.subtitle {
+    font-size: 0.875rem;
+    color: #888;
+    font-weight: 300;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin-bottom: 2rem;
+    border-bottom: 1px solid rgba(0,0,0,0.08);
+    padding-bottom: 1rem;
+}
+
+.input-section {
+    background: rgba(255, 255, 255, 0.6) !important;
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.8) !important;
+    border-radius: 12px !important;
+    padding: 2rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.04) !important;
+}
+
+.projects-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1.5rem;
+    margin: 2rem 0;
+}
+
+.project-card {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.9);
+    border-radius: 12px;
+    padding: 1.5rem;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.project-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, rgba(100, 100, 120, 0.3) 0%, rgba(100, 100, 120, 0) 100%);
+}
+
+.project-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.06);
+    border-color: rgba(100, 100, 120, 0.2);
+}
+
+.project-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.25rem;
+    font-weight: 400;
+    color: #2a2a2a;
+    margin-bottom: 0.75rem;
+    letter-spacing: -0.01em;
+}
+
+.project-meta {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.meta-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.meta-label {
+    font-size: 0.65rem;
+    color: #999;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 0.25rem;
+    font-weight: 500;
+}
+
+.meta-value {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.875rem;
+    color: #4a4a5a;
+}
+
+.project-plugins {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.plugins-label {
+    font-size: 0.65rem;
+    color: #999;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+}
+
+.plugin-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.plugin-tag {
+    padding: 0.25rem 0.75rem;
+    background: rgba(100, 100, 120, 0.08);
+    border-radius: 6px;
+    font-size: 0.7rem;
+    color: #5a5a6a;
+    font-weight: 400;
+    letter-spacing: 0.02em;
+}
+
+.stats-section {
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    border-radius: 12px;
+    padding: 2rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.04);
+    margin-top: 2rem;
+}
+
+.stats-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.5rem;
+    font-weight: 400;
+    color: #2a2a2a;
+    margin-bottom: 1.5rem;
+    letter-spacing: -0.01em;
+}
+
+/* Swiss grid lines */
+.grid-line {
+    position: fixed;
+    pointer-events: none;
+    opacity: 0.03;
+    z-index: 0;
+}
+
+.grid-line-vertical {
+    width: 1px;
+    height: 100%;
+    background: #000;
+    top: 0;
+}
+
+.grid-line-horizontal {
+    height: 1px;
+    width: 100%;
+    background: #000;
+    left: 0;
+}
+
+/* AI Assistant Section */
+.chatbot-section {
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    border-radius: 12px;
+    padding: 2rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.04);
+    margin-top: 2rem;
+}
+
+.chat-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.5rem;
+    font-weight: 400;
+    color: #2a2a2a;
+    margin-bottom: 1.5rem;
+    letter-spacing: -0.01em;
+}

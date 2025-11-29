@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ableton Project Manager - Design Mockup</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&family=Space+Mono:wght@400;700&family=Cormorant+Garamond:wght@300;400&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #e8e8e8 0%, #f5f5f5 100%);
+            color: #3a3a3a;
+            padding: 2rem;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 2.5rem;
+            font-weight: 300;
+            letter-spacing: -0.02em;
+            color: #2a2a2a;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            font-size: 0.875rem;
+            color: #888;
+            font-weight: 300;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            margin-bottom: 3rem;
+            border-bottom: 1px solid rgba(0,0,0,0.08);
+            padding-bottom: 1rem;
+        }
+
+        .input-section {
+            background: rgba(255, 255, 255, 0.6);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.04);
+        }
+
+        .input-group {
+            display: flex;
+            gap: 1rem;
+            align-items: flex-end;
+        }
+
+        .input-wrapper {
+            flex: 1;
+        }
+
+        label {
+            display: block;
+            font-size: 0.75rem;
+            color: #666;
+            margin-bottom: 0.5rem;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            font-weight: 500;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 0.875rem 1rem;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            font-family: 'Space Mono', monospace;
+            font-size: 0.875rem;
+            background: rgba(255, 255, 255, 0.9);
+            color: #2a2a2a;
+            transition: all 0.2s ease;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: rgba(100, 100, 120, 0.3);
+            background: rgba(255, 255, 255, 1);
+            box-shadow: 0 0 0 3px rgba(100, 100, 120, 0.05);
+        }
+
+        button {
+            padding: 0.875rem 2rem;
+            background: linear-gradient(135deg, #5a5a6a 0%, #4a4a5a 100%);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            letter-spacing: 0.03em;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+        }
+
+        .projects-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .project-card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.9);
+            border-radius: 12px;
+            padding: 1.5rem;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .project-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, 
+                rgba(100, 100, 120, 0.3) 0%, 
+                rgba(100, 100, 120, 0) 100%);
+        }
+
+        .project-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.06);
+            border-color: rgba(100, 100, 120, 0.2);
+        }
+
+        .project-title {
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 1.25rem;
+            font-weight: 400;
+            color: #2a2a2a;
+            margin-bottom: 0.75rem;
+            letter-spacing: -0.01em;
+        }
+
+        .project-meta {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        .meta-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .meta-label {
+            font-size: 0.65rem;
+            color: #999;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 0.25rem;
+            font-weight: 500;
+        }
+
+        .meta-value {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.875rem;
+            color: #4a4a5a;
+        }
+
+        .project-plugins {
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid rgba(0, 0, 0, 0.06);
+        }
+
+        .plugins-label {
+            font-size: 0.65rem;
+            color: #999;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+
+        .plugin-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .plugin-tag {
+            padding: 0.25rem 0.75rem;
+            background: rgba(100, 100, 120, 0.08);
+            border-radius: 6px;
+            font-size: 0.7rem;
+            color: #5a5a6a;
+            font-weight: 400;
+            letter-spacing: 0.02em;
+        }
+
+        .stats-section {
+            background: rgba(255, 255, 255, 0.6);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.04);
+        }
+
+        .stats-title {
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 1.5rem;
+            font-weight: 400;
+            color: #2a2a2a;
+            margin-bottom: 1.5rem;
+            letter-spacing: -0.01em;
+        }
+
+        .chart-placeholder {
+            height: 300px;
+            background: linear-gradient(135deg, 
+                rgba(100, 100, 120, 0.03) 0%, 
+                rgba(100, 100, 120, 0.06) 100%);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #999;
+            font-size: 0.875rem;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        /* Swiss grid inspiration */
+        .grid-line {
+            position: fixed;
+            pointer-events: none;
+            opacity: 0.03;
+        }
+
+        .grid-line.vertical {
+            width: 1px;
+            height: 100%;
+            background: #000;
+            top: 0;
+        }
+
+        .grid-line.horizontal {
+            height: 1px;
+            width: 100%;
+            background: #000;
+            left: 0;
+        }
+    </style>
+</head>
+<body>
+    <!-- Swiss grid lines -->
+    <div class="grid-line vertical" style="left: 20%;"></div>
+    <div class="grid-line vertical" style="left: 40%;"></div>
+    <div class="grid-line vertical" style="left: 60%;"></div>
+    <div class="grid-line vertical" style="left: 80%;"></div>
+    <div class="grid-line horizontal" style="top: 33%;"></div>
+    <div class="grid-line horizontal" style="top: 66%;"></div>
+
+    <div class="container">
+        <h1 class="header">Ableton Project Manager</h1>
+        <p class="subtitle">MCP Server · Project Analysis & Discovery</p>
+
+        <div class="input-section">
+            <div class="input-group">
+                <div class="input-wrapper">
+                    <label for="directory">Project Directory</label>
+                    <input type="text" id="directory" value="~/Music/Ableton/Projects" placeholder="/path/to/projects">
+                </div>
+                <button>Scan Projects</button>
+            </div>
+        </div>
+
+        <div class="projects-grid">
+            <div class="project-card">
+                <h3 class="project-title">Dark Techno Idea</h3>
+                <div class="project-meta">
+                    <div class="meta-item">
+                        <span class="meta-label">Tempo</span>
+                        <span class="meta-value">138 BPM</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Tracks</span>
+                        <span class="meta-value">12 Total</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Modified</span>
+                        <span class="meta-value">2 days ago</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Size</span>
+                        <span class="meta-value">8.4 MB</span>
+                    </div>
+                </div>
+                <div class="project-plugins">
+                    <div class="plugins-label">Plugins</div>
+                    <div class="plugin-tags">
+                        <span class="plugin-tag">Serum × 7</span>
+                        <span class="plugin-tag">Valhalla</span>
+                        <span class="plugin-tag">FabFilter</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="project-card">
+                <h3 class="project-title">Bass Experiment</h3>
+                <div class="project-meta">
+                    <div class="meta-item">
+                        <span class="meta-label">Tempo</span>
+                        <span class="meta-value">142 BPM</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Tracks</span>
+                        <span class="meta-value">8 Total</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Modified</span>
+                        <span class="meta-value">1 week ago</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Size</span>
+                        <span class="meta-value">5.2 MB</span>
+                    </div>
+                </div>
+                <div class="project-plugins">
+                    <div class="plugins-label">Plugins</div>
+                    <div class="plugin-tags">
+                        <span class="plugin-tag">Serum × 3</span>
+                        <span class="plugin-tag">Operator</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="project-card">
+                <h3 class="project-title">Club Track Draft</h3>
+                <div class="project-meta">
+                    <div class="meta-item">
+                        <span class="meta-label">Tempo</span>
+                        <span class="meta-value">140 BPM</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Tracks</span>
+                        <span class="meta-value">15 Total</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Modified</span>
+                        <span class="meta-value">3 days ago</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Size</span>
+                        <span class="meta-value">12.8 MB</span>
+                    </div>
+                </div>
+                <div class="project-plugins">
+                    <div class="plugins-label">Plugins</div>
+                    <div class="plugin-tags">
+                        <span class="plugin-tag">Serum × 5</span>
+                        <span class="plugin-tag">Portal</span>
+                        <span class="plugin-tag">EchoBoy</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="project-card">
+                <h3 class="project-title">Ambient Sketch 003</h3>
+                <div class="project-meta">
+                    <div class="meta-item">
+                        <span class="meta-label">Tempo</span>
+                        <span class="meta-value">92 BPM</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Tracks</span>
+                        <span class="meta-value">6 Total</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Modified</span>
+                        <span class="meta-value">2 weeks ago</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Size</span>
+                        <span class="meta-value">3.1 MB</span>
+                    </div>
+                </div>
+                <div class="project-plugins">
+                    <div class="plugins-label">Plugins</div>
+                    <div class="plugin-tags">
+                        <span class="plugin-tag">Omnisphere</span>
+                        <span class="plugin-tag">Valhalla × 2</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="stats-section">
+            <h2 class="stats-title">Project Distribution</h2>
+            <div class="chart-placeholder">
+                BPM Distribution · Plotly Chart
+            </div>
+        </div>
+    </div>
+</body>
+</html>
