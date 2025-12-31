@@ -1,75 +1,30 @@
 # Ableton Project MCP Server
 
-[![GitHub stars](https://img.shields.io/github/stars/closestfriend/ableton-proj-mcp?style=social)](https://github.com/closestfriend/ableton-proj-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![MCP](https://img.shields.io/badge/MCP-1.0-green.svg)](https://modelcontextprotocol.io)
 
-Model Context Protocol (MCP) server for analyzing Ableton Live project files. Provides Claude with the ability to extract and analyze project metadata, including BPM, track structure, plugin usage, device chains, and sample integrity.
+MCP server that parses Ableton Live .als files. Extracts BPM, track structure, plugin inventory, device chains, sample references. Runs locally - nothing leaves your machine.
 
-## What is this?
+Pairs well with the [filesystem MCP server](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem) for directory browsing.
 
-This tool allows Claude (the AI assistant) to read and analyze your Ableton Live project files. It works by:
-1. Installing a "server" (background helper) on your computer
-2. Connecting it to the Claude Desktop app
-3. Enabling Claude to answer questions like "Which of my projects use the most plugins?" or "Find my unfinished tracks"
+## Use Cases
 
-**Important:** Your project files stay on your computer. This tool reads them locally and gives Claude the information - nothing is uploaded to the cloud.
-
-**What are .als files?** These are Ableton Live Set files (the main project files you open in Ableton). This tool reads these files to extract information without opening Ableton.
-
-**Recommended:** Pair this with the [filesystem MCP server](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem) for the best experience in Claude Desktop. The filesystem server lets Claude browse your directories and locate project files, which it can then analyze using this tool. This combination enables natural conversations like "find my recent projects and analyze the ones with the most plugins."
-
-## What Problems Does This Solve?
-
-**Missing Sample Recovery:**
-Extracts complete file paths from project XML. Paired with the filesystem MCP, Claude can search your drives and locate samples even if they've been renamed or moved. Structured JSON output includes every missing file path, making batch recovery or relinking straightforward.
-
-**Plugin Inventory:**
-Extracts complete plugin lists (VST3/VST2/AU) with instance counts from project files without opening Ableton. Useful for system migrations, checking project portability, or locating projects that use specific plugins.
-
-**BPM and Technical Metadata:**
-Query projects by BPM, track count, arrangement length, or automation lane count without opening Ableton. Structured JSON output suitable for scripting or spreadsheet analysis.
-
-**Duplicate Detection by Content:**
-Compares project content (track structure, device chains, MIDI patterns) rather than filenames. Identifies duplicate projects regardless of naming scheme.
-
-**Master Chain Analysis:**
-Extracts and compares mastering device chains across projects. Groups projects by shared master processing.
-
-**Natural Language + Structured Data:**
-Conversational queries return structured JSON. Example: "find my 140 BPM projects with Serum that have missing samples" returns JSON with file paths. Export to CSV, pipe into scripts, or use filesystem MCP for file operations. Combines natural language interface with machine-readable output.
+- **Missing samples**: Extracts file paths from project XML. Returns structured JSON for batch relinking.
+- **Plugin inventory**: Lists VST3/VST2/AU plugins with instance counts. Useful for migrations.
+- **Metadata queries**: BPM, track count, arrangement length. JSON output for scripting.
+- **Duplicate detection**: Content-based hashing (track structure, device chains, MIDI patterns).
+- **Master chain analysis**: Compare mastering setups across projects.
 
 ## Installation
 
-### Prerequisites
+Requires Python 3.10+ and [uv](https://github.com/astral-sh/uv).
 
-**System Requirements:**
-- macOS (tested on macOS 10.15+)
-- Claude Desktop app installed
-- Python 3.10 or higher (usually pre-installed on modern macOS)
-
-**To check your Python version:**
-1. Open Terminal (Applications → Utilities → Terminal)
-2. Type: `python3 --version`
-3. You should see "Python 3.10" or higher
-
-If you don't have Python 3.10+, download it from [python.org](https://www.python.org/downloads/)
-
-**Install uv package manager:**
-
-This tool requires `uv` - a modern Python package manager that handles all the technical dependencies automatically (you won't need to manage Python versions or packages yourself).
-
-Install `uv` by pasting this command into your Terminal:
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-**Note for macOS users:** Terminal can be found in Applications → Utilities → Terminal
-
-### Configuration
-
-Add to Claude Desktop configuration file (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ```json
 {
@@ -80,7 +35,7 @@ Add to Claude Desktop configuration file (`~/Library/Application Support/Claude/
         "tool",
         "run",
         "--from",
-        "/absolute/path/to/ableton-proj-mcp",
+        "/path/to/ableton-proj-mcp",
         "music-manager-mcp"
       ]
     }
@@ -88,25 +43,7 @@ Add to Claude Desktop configuration file (`~/Library/Application Support/Claude/
 }
 ```
 
-**To find your installation path:**
-1. Open Terminal
-2. Navigate to where you downloaded/cloned this repository
-3. Type `pwd` and press Enter
-4. Copy the path that appears (e.g., `/Users/yourname/Downloads/ableton-proj-mcp`)
-5. Use this path in the configuration above
-
-**Example:** If `pwd` shows `/Users/jane/Projects/ableton-proj-mcp`, your config should be:
-```json
-"args": [
-  "tool",
-  "run",
-  "--from",
-  "/Users/jane/Projects/ableton-proj-mcp",
-  "music-manager-mcp"
-]
-```
-
-Restart Claude Desktop to load the server.
+Restart Claude Desktop.
 
 ## Available Tools
 
