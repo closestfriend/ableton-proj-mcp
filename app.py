@@ -1,26 +1,357 @@
 #!/usr/bin/env python3
 """
-Ableton Project Manager - Gradio Interface
-Beautiful UI for the Ableton MCP Server
+Ableton Project Manager - MCP Server & Gradio Interface
+Track 1: Building MCP - Productivity Category
+
+A Model Context Protocol server that enables LLMs to analyze Ableton Live projects.
+Extracts BPM, track counts, plugin inventories, and project metadata from .als files.
 """
 
 import gradio as gr
 import os
 from pathlib import Path
-from music_mcp import SafeAbletonProject, safe_scan_directory
-import plotly.graph_objects as go
+from music_mcp import SafeAbletonProject, safe_scan_directory, MAX_FILES_TO_SCAN, MAX_FILE_SIZE_MB, SCAN_DEPTH
 from datetime import datetime
-from huggingface_hub import InferenceClient
+from typing import Optional
 
-# Custom CSS matching the mockup
+# =============================================================================
+# MCP TOOL FUNCTIONS (exposed to LLMs via gr.api())
+# These functions return structured JSON data for machine consumption
+# =============================================================================
+
+def mcp_scan_projects(directory: str) -> dict:
+    """Scan a directory for Ableton Live project files (.als).
+    
+    Discovers all Ableton projects in the specified directory and subdirectories,
+    returning basic metadata without deep analysis. Use this for initial discovery
+    before calling mcp_analyze_projects on specific files.
+    
+    Args:
+        directory: Full path to the folder containing .als project files.
+                   Example: "/Users/musician/Music/Ableton/Projects"
+    
+    Returns:
+        Dictionary containing:
+        - projects: List of project objects with name, path, folder, size_mb, last_modified
+        - count: Total number of projects found
+        - hit_limit: Boolean indicating if scan limit was reached
+        - scanned_directory: The directory that was scanned
+    """
+    if not directory:
+        return {"error": "No directory provided", "projects": [], "count": 0}
+    
+    expanded_path = os.path.expanduser(directory)
+    
+    if not os.path.exists(expanded_path):
+        return {"error": f"Directory does not exist: {expanded_path}", "projects": [], "count": 0}
+    
+    if not os.path.isdir(expanded_path):
+        return {"error": f"Path is not a directory: {expanded_path}", "projects": [], "count": 0}
+    
+    try:
+        projects, hit_limit = safe_scan_directory(expanded_path)
+        
+        return {
+            "projects": [
+                {
+                    "name": p.filename,
+                    "path": p.filepath,
+                    "folder": p.folder,
+                    "size_mb": p.size_mb,
+                    "last_modified": p.last_modified
+                }
+                for p in projects
+            ],
+            "count": len(projects),
+            "hit_limit": hit_limit,
+            "scanned_directory": expanded_path,
+            "limits": {
+                "max_files": MAX_FILES_TO_SCAN,
+                "max_file_size_mb": MAX_FILE_SIZE_MB,
+                "max_depth": SCAN_DEPTH
+            }
+        }
+    except Exception as e:
+        return {"error": str(e), "projects": [], "count": 0}
+
+
+def mcp_analyze_projects(project_paths: list[str]) -> dict:
+    """Perform deep analysis on specific Ableton Live project files.
+    
+    Parses the internal XML structure of .als files to extract comprehensive
+    metadata including BPM, track details, plugins, master chain, markers,
+    arrangement structure, and completion assessment.
+    
+    Args:
+        project_paths: List of full paths to .als files to analyze.
+                       Get these paths from mcp_scan_projects results.
+                       Maximum 20 projects per call for performance.
+    
+    Returns:
+        Dictionary containing:
+        - projects: List of analyzed project objects with full metadata
+        - analyzed_count: Number of successfully analyzed projects
+        - errors: List of any errors encountered
+        
+        Each project includes: bpm, track_count, track_names, master_chain,
+        markers, arrangement_length_bars, scene_count, plugins, heavy_plugin_count,
+        frozen_track_count, missing_samples, likely_finished, content_hash
+    """
+    if not project_paths:
+        return {"error": "No project paths provided", "projects": [], "analyzed_count": 0}
+    
+    if len(project_paths) > 20:
+        return {
+            "error": "Maximum 20 projects per analysis call. Please reduce the list.",
+            "projects": [],
+            "analyzed_count": 0
+        }
+    
+    results = []
+    errors = []
+    
+    for path in project_paths:
+        if not os.path.exists(path):
+            errors.append({"path": path, "error": "File not found"})
+            continue
+        
+        try:
+            proj = SafeAbletonProject(path)
+            success = proj.analyze()
+            
+            plugin_summary = {}
+            if proj.plugin_count > 0:
+                for plugin_type, plugin_name in proj.plugins:
+                    key = f"{plugin_name} ({plugin_type})"
+                    plugin_summary[key] = plugin_summary.get(key, 0) + 1
+            
+            result = {
+                "name": proj.filename,
+                "path": proj.filepath,
+                "folder": proj.folder,
+                "size_mb": proj.size_mb,
+                "last_modified": proj.last_modified,
+                "analysis_success": success,
+                "bpm": proj.bpm,
+                "track_count": proj.track_count,
+                "audio_tracks": proj.audio_tracks,
+                "midi_tracks": proj.midi_tracks,
+                "track_names": proj.track_names,
+                "frozen_track_count": proj.frozen_track_count,
+                "master_chain": proj.master_chain,
+                "has_master_chain": proj.has_master_chain,
+                "arrangement_length_bars": proj.arrangement_length_bars,
+                "scene_count": proj.scene_count,
+                "markers": proj.markers,
+                "marker_count": proj.marker_count,
+                "total_clips": proj.total_clips,
+                "plugin_count": proj.plugin_count,
+                "plugins": plugin_summary,
+                "heavy_plugin_count": proj.heavy_plugin_count,
+                "builtin_devices": proj.builtin_devices,
+                "sample_count": proj.sample_count,
+                "missing_sample_count": proj.missing_sample_count,
+                "missing_samples": proj.missing_samples[:10],
+                "likely_finished": proj.likely_finished,
+                "content_hash": proj.content_hash,
+                "midi_pattern_hash": proj.midi_pattern_hash,
+            }
+            
+            if not success and proj.error:
+                result["analysis_error"] = proj.error
+            
+            results.append(result)
+            
+        except Exception as e:
+            errors.append({"path": path, "error": str(e)})
+    
+    return {
+        "projects": results,
+        "analyzed_count": len(results),
+        "errors": errors if errors else None
+    }
+
+
+def mcp_find_recent_projects(directory: str, limit: int = 10) -> dict:
+    """Find the most recently modified Ableton projects in a directory.
+    
+    Scans for projects and returns them sorted by modification time,
+    with full analysis performed on each. Useful for finding works-in-progress.
+    
+    Args:
+        directory: Full path to the folder to scan.
+        limit: Maximum number of recent projects to return (default: 10, max: 20).
+    
+    Returns:
+        Dictionary containing:
+        - projects: List of recent projects with full analysis, sorted newest first
+        - count: Number of projects returned
+        - wip_count: Number of work-in-progress projects
+        - finished_count: Number of likely finished projects
+    """
+    if not directory:
+        return {"error": "No directory provided", "projects": [], "count": 0}
+    
+    expanded_path = os.path.expanduser(directory)
+    
+    if not os.path.exists(expanded_path):
+        return {"error": f"Directory does not exist: {expanded_path}", "projects": [], "count": 0}
+    
+    limit = min(max(1, limit), 20)
+    
+    try:
+        projects, _ = safe_scan_directory(expanded_path)
+        
+        if not projects:
+            return {"projects": [], "count": 0, "scanned_directory": expanded_path}
+        
+        projects.sort(key=lambda p: os.path.getmtime(p.filepath), reverse=True)
+        recent = projects[:limit]
+        
+        results = []
+        wip_count = 0
+        finished_count = 0
+        
+        for proj in recent:
+            proj.analyze()
+            
+            plugin_summary = {}
+            if proj.plugin_count > 0:
+                for plugin_type, plugin_name in proj.plugins:
+                    key = f"{plugin_name} ({plugin_type})"
+                    plugin_summary[key] = plugin_summary.get(key, 0) + 1
+            
+            if proj.likely_finished:
+                finished_count += 1
+            else:
+                wip_count += 1
+            
+            results.append({
+                "name": proj.filename,
+                "path": proj.filepath,
+                "folder": proj.folder,
+                "size_mb": proj.size_mb,
+                "last_modified": proj.last_modified,
+                "bpm": proj.bpm,
+                "track_count": proj.track_count,
+                "audio_tracks": proj.audio_tracks,
+                "midi_tracks": proj.midi_tracks,
+                "track_names": proj.track_names,
+                "master_chain": proj.master_chain,
+                "markers": proj.markers,
+                "arrangement_length_bars": proj.arrangement_length_bars,
+                "scene_count": proj.scene_count,
+                "plugin_count": proj.plugin_count,
+                "plugins": plugin_summary,
+                "heavy_plugin_count": proj.heavy_plugin_count,
+                "frozen_track_count": proj.frozen_track_count,
+                "missing_sample_count": proj.missing_sample_count,
+                "likely_finished": proj.likely_finished,
+                "content_hash": proj.content_hash,
+            })
+        
+        return {
+            "projects": results,
+            "count": len(results),
+            "wip_count": wip_count,
+            "finished_count": finished_count,
+            "scanned_directory": expanded_path
+        }
+        
+    except Exception as e:
+        return {"error": str(e), "projects": [], "count": 0}
+
+
+def mcp_analyze_uploaded_file(file_path: str) -> dict:
+    """Analyze a single uploaded Ableton Live project file.
+    
+    Performs comprehensive analysis on an uploaded .als file, extracting
+    all available metadata including track details, plugins, master chain,
+    markers, and completion assessment.
+    
+    Args:
+        file_path: Path to the uploaded .als file (provided by Gradio upload).
+    
+    Returns:
+        Dictionary containing full project analysis:
+        - Basic: name, bpm, track_count, size
+        - Tracks: track_names, frozen_track_count
+        - Structure: arrangement_length_bars, scene_count, markers
+        - Audio: master_chain, plugins, heavy_plugin_count
+        - Status: likely_finished, missing_samples, content_hash
+    """
+    if not file_path:
+        return {"error": "No file provided"}
+    
+    if not os.path.exists(file_path):
+        return {"error": f"File not found: {file_path}"}
+    
+    try:
+        proj = SafeAbletonProject(file_path)
+        success = proj.analyze()
+        
+        plugin_summary = {}
+        if proj.plugin_count > 0:
+            for plugin_type, plugin_name in proj.plugins:
+                key = f"{plugin_name} ({plugin_type})"
+                plugin_summary[key] = plugin_summary.get(key, 0) + 1
+        
+        result = {
+            "name": proj.filename,
+            "size_mb": proj.size_mb,
+            "last_modified": proj.last_modified,
+            "analysis_success": success,
+            "bpm": proj.bpm,
+            "track_count": proj.track_count,
+            "audio_tracks": proj.audio_tracks,
+            "midi_tracks": proj.midi_tracks,
+            "track_names": proj.track_names,
+            "frozen_track_count": proj.frozen_track_count,
+            "master_chain": proj.master_chain,
+            "has_master_chain": proj.has_master_chain,
+            "arrangement_length_bars": proj.arrangement_length_bars,
+            "has_arrangement": proj.has_arrangement,
+            "scene_count": proj.scene_count,
+            "markers": proj.markers,
+            "marker_count": proj.marker_count,
+            "total_clips": proj.total_clips,
+            "plugin_count": proj.plugin_count,
+            "plugins": plugin_summary,
+            "unique_plugins": list(set(name for _, name in proj.plugins)) if proj.plugins else [],
+            "heavy_plugin_count": proj.heavy_plugin_count,
+            "builtin_devices": proj.builtin_devices,
+            "sample_count": proj.sample_count,
+            "missing_sample_count": proj.missing_sample_count,
+            "missing_samples": proj.missing_samples[:10],
+            "likely_finished": proj.likely_finished,
+            "content_hash": proj.content_hash,
+            "midi_pattern_hash": proj.midi_pattern_hash,
+        }
+        
+        if not success and proj.error:
+            result["analysis_error"] = proj.error
+        
+        return result
+        
+    except Exception as e:
+        return {"error": str(e)}
+
+
+# =============================================================================
+# UI HELPER FUNCTIONS (for the Gradio web interface)
+# =============================================================================
+
 CUSTOM_CSS = """
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&family=Space+Mono:wght@400;700&family=Cormorant+Garamond:wght@300;400&display=swap');
 
+/* === BASE CONTAINER === */
 .gradio-container {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
-    background: linear-gradient(135deg, #e8e8e8 0%, #f5f5f5 100%) !important;
+    background: linear-gradient(180deg, #f8f8f9 0%, #eeeef0 100%) !important;
+    min-height: 100vh;
 }
 
+/* === HEADER STYLES === */
 .header {
     font-family: 'Cormorant Garamond', serif;
     font-size: 2.5rem;
@@ -41,26 +372,28 @@ CUSTOM_CSS = """
     padding-bottom: 1rem;
 }
 
+/* === INPUT SECTIONS === */
 .input-section {
-    background: rgba(255, 255, 255, 0.6) !important;
+    background: rgba(255, 255, 255, 0.7) !important;
     backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.8) !important;
+    border: 1px solid rgba(200, 200, 210, 0.5) !important;
     border-radius: 12px !important;
     padding: 2rem;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.04) !important;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.03) !important;
 }
 
+/* === PROJECT CARDS GRID === */
 .projects-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
     gap: 1.5rem;
     margin: 2rem 0;
 }
 
 .project-card {
-    background: rgba(255, 255, 255, 0.7);
+    background: rgba(255, 255, 255, 0.8);
     backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(200, 200, 210, 0.4);
     border-radius: 12px;
     padding: 1.5rem;
     transition: all 0.3s ease;
@@ -74,299 +407,353 @@ CUSTOM_CSS = """
     left: 0;
     right: 0;
     height: 2px;
-    background: linear-gradient(90deg, rgba(100, 100, 120, 0.3) 0%, rgba(100, 100, 120, 0) 100%);
+    background: linear-gradient(90deg, rgba(90, 90, 110, 0.2) 0%, rgba(90, 90, 110, 0) 100%);
+    border-radius: 12px 12px 0 0;
 }
 
 .project-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.06);
-    border-color: rgba(100, 100, 120, 0.2);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.06);
+    border-color: rgba(90, 90, 110, 0.25);
 }
 
 .project-title {
     font-family: 'Cormorant Garamond', serif;
-    font-size: 1.25rem;
+    font-size: 1.35rem;
     font-weight: 400;
     color: #2a2a2a;
     margin-bottom: 0.75rem;
     letter-spacing: -0.01em;
 }
 
-.project-meta {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0.75rem;
-    margin-bottom: 1rem;
-}
-
-.meta-item {
-    display: flex;
-    flex-direction: column;
-}
-
-.meta-label {
-    font-size: 0.65rem;
-    color: #999;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    margin-bottom: 0.25rem;
-    font-weight: 500;
-}
-
-.meta-value {
+/* === MCP INFO BOX === */
+.mcp-info {
+    background: rgba(90, 90, 110, 0.04);
+    border: 1px solid rgba(90, 90, 110, 0.1);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-top: 2rem;
     font-family: 'Space Mono', monospace;
-    font-size: 0.875rem;
-    color: #4a4a5a;
+    font-size: 0.8rem;
+    color: #3a3a4a;
 }
 
-.project-plugins {
-    margin-top: 1rem;
-    padding-top: 1rem;
-    border-top: 1px solid rgba(0, 0, 0, 0.06);
+.mcp-info code {
+    background: rgba(0, 0, 0, 0.05);
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
 }
 
-.plugins-label {
+/* Force readable text color inside MCP info regardless of theme */
+.mcp-info, .mcp-info *, .mcp-info ul, .mcp-info li {
+    color: #2f2f3a !important;
+}
+
+/* === EXPANDABLE TRACK LISTS === */
+.track-expand-btn {
+    cursor: pointer;
+    color: #6a6a8a;
     font-size: 0.65rem;
-    color: #999;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    margin-bottom: 0.5rem;
-    font-weight: 500;
+    padding: 0.15rem 0;
+    transition: color 0.2s;
 }
 
-.plugin-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
+.track-expand-btn:hover {
+    color: #4a4a6a;
 }
 
-.plugin-tag {
-    padding: 0.25rem 0.75rem;
-    background: rgba(100, 100, 120, 0.08);
-    border-radius: 6px;
-    font-size: 0.7rem;
-    color: #5a5a6a;
-    font-weight: 400;
-    letter-spacing: 0.02em;
+.track-hidden {
+    display: none;
 }
 
-.stats-section {
-    background: rgba(255, 255, 255, 0.6);
-    backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.8);
-    border-radius: 12px;
-    padding: 2rem;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.04);
-    margin-top: 2rem;
+.track-visible {
+    display: block;
 }
 
-.stats-title {
-    font-family: 'Cormorant Garamond', serif;
-    font-size: 1.5rem;
-    font-weight: 400;
-    color: #2a2a2a;
-    margin-bottom: 1.5rem;
-    letter-spacing: -0.01em;
+/* === TAB STYLING === */
+.tabs button {
+    color: #4a4a5a !important;
 }
 
-/* Swiss grid lines */
-.grid-line {
-    position: fixed;
-    pointer-events: none;
-    opacity: 0.03;
-    z-index: 0;
+.tabs button.selected {
+    color: #2a2a3a !important;
+    font-weight: 500 !important;
 }
 
-.grid-line-vertical {
-    width: 1px;
-    height: 100%;
-    background: #000;
-    top: 0;
+/* === FILE UPLOAD STYLING === */
+.upload-box {
+    border: 2px dashed rgba(90, 90, 110, 0.25) !important;
+    border-radius: 12px !important;
+    background: rgba(250, 250, 252, 0.5) !important;
+    transition: all 0.3s ease !important;
+    min-height: 180px !important;
 }
 
-.grid-line-horizontal {
-    height: 1px;
-    width: 100%;
-    background: #000;
-    left: 0;
+.upload-box:hover {
+    border-color: rgba(90, 90, 110, 0.4) !important;
+    background: rgba(250, 250, 252, 0.8) !important;
 }
 
-/* AI Assistant Section */
-.chatbot-section {
-    background: rgba(255, 255, 255, 0.6);
-    backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.8);
-    border-radius: 12px;
-    padding: 2rem;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.04);
-    margin-top: 2rem;
+/* Keep file upload area usable after files are added */
+.upload-box .file-preview {
+    min-height: 120px !important;
 }
 
-.chat-title {
-    font-family: 'Cormorant Garamond', serif;
-    font-size: 1.5rem;
-    font-weight: 400;
-    color: #2a2a2a;
-    margin-bottom: 1.5rem;
-    letter-spacing: -0.01em;
+.upload-box [data-testid="file-upload-area"] {
+    min-height: 160px !important;
+}
+
+/* === BUTTON TEXT FIX === */
+/* Force primary button text to be white for readability */
+button.primary,
+.primary button,
+button[variant="primary"] {
+    color: white !important;
 }
 """
 
+# Custom theme to replace Gradio's orange defaults
+CUSTOM_THEME = gr.themes.Base(
+    primary_hue=gr.themes.colors.slate,
+    secondary_hue=gr.themes.colors.gray,
+    neutral_hue=gr.themes.colors.gray,
+    font=[gr.themes.GoogleFont("Inter"), "system-ui", "sans-serif"],
+    font_mono=[gr.themes.GoogleFont("Space Mono"), "monospace"],
+).set(
+    # Buttons
+    button_primary_background_fill="linear-gradient(135deg, #5a5a6a 0%, #4a4a5a 100%)",
+    button_primary_background_fill_hover="linear-gradient(135deg, #6a6a7a 0%, #5a5a6a 100%)",
+    button_primary_text_color="white",
+    button_secondary_background_fill="rgba(90, 90, 110, 0.08)",
+    button_secondary_background_fill_hover="rgba(90, 90, 110, 0.15)",
+    button_secondary_text_color="#4a4a5a",
+    
+    # Inputs
+    input_background_fill="rgba(255, 255, 255, 0.8)",
+    input_border_color="rgba(200, 200, 210, 0.5)",
+    input_border_color_focus="rgba(90, 90, 110, 0.4)",
+    
+    # Blocks
+    block_background_fill="rgba(255, 255, 255, 0.6)",
+    block_border_color="rgba(200, 200, 210, 0.4)",
+    block_label_background_fill="rgba(250, 250, 252, 0.8)",
+    block_title_text_color="#3a3a4a",
+    
+    # Checkboxes
+    checkbox_background_color="rgba(255, 255, 255, 0.9)",
+    checkbox_background_color_selected="#5a5a6a",
+    checkbox_border_color="rgba(200, 200, 210, 0.6)",
+)
+
+
 def generate_project_card_html(project, analyzed=False):
     """Generate HTML for a single project card"""
-    # Get plugin summary
+    
+    # Plugin section
     plugin_html = ""
     if analyzed and project.plugin_count > 0:
-        # Count instances of each plugin
         plugin_counts = {}
         for _, plugin_name in project.plugins:
             plugin_counts[plugin_name] = plugin_counts.get(plugin_name, 0) + 1
         
         plugin_tags = []
-        for plugin, count in list(plugin_counts.items())[:5]:  # Show top 5
+        for plugin, count in list(plugin_counts.items())[:5]:
             display = f"{plugin} × {count}" if count > 1 else plugin
-            plugin_tags.append(f'<span class="plugin-tag" style="padding: 0.25rem 0.75rem; background: rgba(100, 100, 120, 0.08); border-radius: 6px; font-size: 0.7rem; color: #5a5a6a; margin-right: 0.5rem; margin-bottom: 0.5rem; display: inline-block;">{display}</span>')
+            plugin_tags.append(f'<span style="padding: 0.25rem 0.75rem; background: rgba(100, 100, 120, 0.08); border-radius: 6px; font-size: 0.7rem; color: #5a5a6a; margin-right: 0.5rem; margin-bottom: 0.5rem; display: inline-block;">{display}</span>')
 
         plugin_html = f"""
-        <div class="project-plugins" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(0, 0, 0, 0.06);">
-            <div class="plugins-label" style="font-size: 0.65rem; color: #999; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.5rem; font-weight: 500;">Plugins</div>
-            <div class="plugin-tags" style="display: flex; flex-wrap: wrap;">
+        <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(0, 0, 0, 0.06);">
+            <div style="font-size: 0.65rem; color: #999; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.5rem; font-weight: 500;">Plugins ({project.plugin_count})</div>
+            <div style="display: flex; flex-wrap: wrap;">
                 {''.join(plugin_tags)}
             </div>
         </div>
         """
     
-    # Build meta values
+    # Master chain section
+    master_html = ""
+    if analyzed and hasattr(project, 'master_chain') and project.master_chain:
+        master_devices = ' → '.join(project.master_chain[:6])
+        if len(project.master_chain) > 6:
+            master_devices += f' (+{len(project.master_chain) - 6})'
+        master_html = f"""
+        <div style="margin-top: 0.75rem;">
+            <div style="font-size: 0.65rem; color: #999; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.25rem; font-weight: 500;">Master Chain</div>
+            <div style="font-size: 0.75rem; color: #5a5a6a;">{master_devices}</div>
+        </div>
+        """
+    
+    # Markers section
+    markers_html = ""
+    if analyzed and hasattr(project, 'markers') and project.markers:
+        marker_tags = [f'<span style="padding: 0.15rem 0.5rem; background: rgba(80, 120, 100, 0.12); border-radius: 4px; font-size: 0.65rem; color: #4a6a5a; margin-right: 0.4rem; display: inline-block;">{m}</span>' for m in project.markers[:6]]
+        markers_html = f"""
+        <div style="margin-top: 0.75rem;">
+            <div style="font-size: 0.65rem; color: #999; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.25rem; font-weight: 500;">Markers</div>
+            <div>{''.join(marker_tags)}</div>
+        </div>
+        """
+    
+    # Track names section — split by type with expandable lists
+    tracks_html = ""
+    if analyzed and hasattr(project, 'track_details') and project.track_details:
+        import random
+        card_id = f"card_{random.randint(10000, 99999)}"
+        
+        midi_tracks = [t['name'] for t in project.track_details if t.get('type') == 'MIDI']
+        audio_tracks = [t['name'] for t in project.track_details if t.get('type') == 'Audio']
+        
+        def build_track_list(tracks, track_type, card_id):
+            if not tracks:
+                return '<div style="font-size: 0.7rem; color: #bbb;">—</div>'
+            
+            visible = tracks[:6]
+            hidden = tracks[6:]
+            list_id = f"{card_id}_{track_type}"
+            
+            html = ''.join([f'<div style="font-size: 0.7rem; color: #6a6a7a; padding: 0.15rem 0; border-bottom: 1px solid rgba(0,0,0,0.04);">{name}</div>' for name in visible])
+            
+            if hidden:
+                hidden_html = ''.join([f'<div style="font-size: 0.7rem; color: #6a6a7a; padding: 0.15rem 0; border-bottom: 1px solid rgba(0,0,0,0.04);">{name}</div>' for name in hidden])
+                html += f'''
+                <div id="{list_id}_hidden" style="display: none;">{hidden_html}</div>
+                <div id="{list_id}_btn" class="track-expand-btn" onclick="
+                    var hidden = document.getElementById('{list_id}_hidden');
+                    var btn = document.getElementById('{list_id}_btn');
+                    if (hidden.style.display === 'none') {{
+                        hidden.style.display = 'block';
+                        btn.textContent = '▲ collapse';
+                    }} else {{
+                        hidden.style.display = 'none';
+                        btn.textContent = '+{len(hidden)} more';
+                    }}
+                ">+{len(hidden)} more</div>
+                '''
+            return html
+        
+        midi_html = build_track_list(midi_tracks, 'midi', card_id)
+        audio_html = build_track_list(audio_tracks, 'audio', card_id)
+        
+        tracks_html = f"""
+        <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid rgba(0,0,0,0.06);">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div>
+                    <div style="font-size: 0.65rem; color: #888; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.4rem; font-weight: 500;">🎹 MIDI ({len(midi_tracks)})</div>
+                    {midi_html}
+                </div>
+                <div>
+                    <div style="font-size: 0.65rem; color: #888; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.4rem; font-weight: 500;">🎚️ Audio ({len(audio_tracks)})</div>
+                    {audio_html}
+                </div>
+            </div>
+        </div>
+        """
+    
+    # Status badges
+    badges_html = ""
+    if analyzed:
+        badges = []
+        if hasattr(project, 'likely_finished') and project.likely_finished:
+            badges.append('<span style="padding: 0.2rem 0.5rem; background: rgba(80, 160, 80, 0.15); color: #3a7a3a; border-radius: 4px; font-size: 0.6rem; font-weight: 500;">✓ FINISHED</span>')
+        else:
+            badges.append('<span style="padding: 0.2rem 0.5rem; background: rgba(180, 140, 60, 0.15); color: #8a6a2a; border-radius: 4px; font-size: 0.6rem; font-weight: 500;">WIP</span>')
+        
+        if hasattr(project, 'frozen_track_count') and project.frozen_track_count > 0:
+            badges.append(f'<span style="padding: 0.2rem 0.5rem; background: rgba(100, 160, 200, 0.15); color: #3a6a8a; border-radius: 4px; font-size: 0.6rem;">❄️ {project.frozen_track_count} frozen</span>')
+        
+        if hasattr(project, 'heavy_plugin_count') and project.heavy_plugin_count > 0:
+            badges.append(f'<span style="padding: 0.2rem 0.5rem; background: rgba(200, 100, 80, 0.15); color: #8a3a2a; border-radius: 4px; font-size: 0.6rem;">⚓️ {project.heavy_plugin_count} heavy</span>')
+        
+        if hasattr(project, 'missing_sample_count') and project.missing_sample_count > 0:
+            badges.append(f'<span style="padding: 0.2rem 0.5rem; background: rgba(200, 60, 60, 0.15); color: #8a2a2a; border-radius: 4px; font-size: 0.6rem;">⚠️ {project.missing_sample_count} missing</span>')
+        
+        if badges:
+            badges_html = f'<div style="display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.75rem;">{" ".join(badges)}</div>'
+    
     bpm_value = f"{project.bpm} BPM" if analyzed and project.bpm else "—"
     tracks_value = f"{project.track_count} Total" if analyzed else "—"
+    arrangement_value = f"{project.arrangement_length_bars} bars" if analyzed and hasattr(project, 'arrangement_length_bars') and project.arrangement_length_bars > 0 else "—"
+    scenes_value = f"{project.scene_count}" if analyzed and hasattr(project, 'scene_count') and project.scene_count > 0 else "—"
     
     return f"""
     <div class="project-card">
         <h3 class="project-title">{project.filename.replace('.als', '')}</h3>
-        <div class="project-meta">
-            <div class="meta-item">
-                <span class="meta-label">Tempo</span>
-                <span class="meta-value">{bpm_value}</span>
+        {badges_html}
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; margin: 1rem 0;">
+            <div>
+                <span style="font-size: 0.65rem; color: #999; text-transform: uppercase; letter-spacing: 0.08em; display: block; margin-bottom: 0.25rem;">Tempo</span>
+                <span style="font-family: 'Space Mono', monospace; font-size: 0.875rem; color: #4a4a5a;">{bpm_value}</span>
             </div>
-            <div class="meta-item">
-                <span class="meta-label">Tracks</span>
-                <span class="meta-value">{tracks_value}</span>
+            <div>
+                <span style="font-size: 0.65rem; color: #999; text-transform: uppercase; letter-spacing: 0.08em; display: block; margin-bottom: 0.25rem;">Tracks</span>
+                <span style="font-family: 'Space Mono', monospace; font-size: 0.875rem; color: #4a4a5a;">{tracks_value}</span>
             </div>
-            <div class="meta-item">
-                <span class="meta-label">Modified</span>
-                <span class="meta-value">{project.last_modified}</span>
+            <div>
+                <span style="font-size: 0.65rem; color: #999; text-transform: uppercase; letter-spacing: 0.08em; display: block; margin-bottom: 0.25rem;">Arrangement</span>
+                <span style="font-family: 'Space Mono', monospace; font-size: 0.875rem; color: #4a4a5a;">{arrangement_value}</span>
             </div>
-            <div class="meta-item">
-                <span class="meta-label">Size</span>
-                <span class="meta-value">{project.size_mb} MB</span>
+            <div>
+                <span style="font-size: 0.65rem; color: #999; text-transform: uppercase; letter-spacing: 0.08em; display: block; margin-bottom: 0.25rem;">Scenes</span>
+                <span style="font-family: 'Space Mono', monospace; font-size: 0.875rem; color: #4a4a5a;">{scenes_value}</span>
+            </div>
+            <div>
+                <span style="font-size: 0.65rem; color: #999; text-transform: uppercase; letter-spacing: 0.08em; display: block; margin-bottom: 0.25rem;">Modified</span>
+                <span style="font-family: 'Space Mono', monospace; font-size: 0.875rem; color: #4a4a5a;">{project.last_modified}</span>
+            </div>
+            <div>
+                <span style="font-size: 0.65rem; color: #999; text-transform: uppercase; letter-spacing: 0.08em; display: block; margin-bottom: 0.25rem;">Size</span>
+                <span style="font-family: 'Space Mono', monospace; font-size: 0.875rem; color: #4a4a5a;">{project.size_mb} MB</span>
             </div>
         </div>
+        {tracks_html}
+        {master_html}
+        {markers_html}
         {plugin_html}
     </div>
     """
 
-def scan_and_display(directory, analyze_all=False):
-    """Scan directory and return HTML grid of projects"""
-    if not directory or not os.path.exists(directory):
-        return "<p style='color: #999; text-align: center; padding: 2rem;'>Please enter a valid directory path</p>", None, []
+
+def ui_scan_and_display(directory, analyze_all=False):
+    """UI handler: Scan directory and return HTML grid"""
+    if not directory or not os.path.exists(os.path.expanduser(directory)):
+        return "<p style='color: #999; text-align: center; padding: 2rem;'>Please enter a valid directory path</p>"
 
     try:
-        projects, hit_limit = safe_scan_directory(directory)
+        projects, hit_limit = safe_scan_directory(os.path.expanduser(directory))
 
         if not projects:
-            return "<p style='color: #999; text-align: center; padding: 2rem;'>No Ableton projects found in this directory</p>", None, []
+            return "<p style='color: #999; text-align: center; padding: 2rem;'>No Ableton projects found in this directory</p>"
 
-        # Optionally analyze all projects
         if analyze_all and len(projects) <= 20:
             for proj in projects:
                 proj.analyze()
 
-        # Generate cards
         cards = [generate_project_card_html(proj, analyze_all) for proj in projects]
-
         html = f'<div class="projects-grid">{"".join(cards)}</div>'
+        
+        if hit_limit:
+            html = f'<p style="color: #888; text-align: center; margin-bottom: 1rem;">⚠️ Showing first {len(projects)} projects (limit reached)</p>' + html
 
-        # Generate BPM chart if analyzed
-        chart = None
-        if analyze_all:
-            chart = create_bpm_chart(projects)
-
-        return html, chart, projects
+        return html
 
     except Exception as e:
-        return f"<p style='color: #ff6b6b; padding: 2rem;'>Error: {str(e)}</p>", None, []
+        return f"<p style='color: #ff6b6b; padding: 2rem;'>Error: {str(e)}</p>"
 
-def create_bpm_chart(projects):
-    """Create a BPM distribution chart using Plotly"""
-    # Filter projects with BPM data
-    bpms = [p.bpm for p in projects if p.bpm is not None]
-    
-    if not bpms:
-        return None
-    
-    # Create histogram
-    fig = go.Figure()
-    
-    fig.add_trace(go.Histogram(
-        x=bpms,
-        nbinsx=20,
-        marker=dict(
-            color='rgba(100, 100, 120, 0.6)',
-            line=dict(color='rgba(100, 100, 120, 0.8)', width=1)
-        ),
-        hovertemplate='BPM Range: %{x}<br>Projects: %{y}<extra></extra>'
-    ))
-    
-    fig.update_layout(
-        title=dict(
-            text="BPM Distribution",
-            font=dict(family="Cormorant Garamond", size=20, color="#2a2a2a"),
-            x=0.5,
-            xanchor='center'
-        ),
-        xaxis_title="BPM",
-        yaxis_title="Number of Projects",
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)',
-        font=dict(family="Inter", size=12, color="#666"),
-        margin=dict(t=60, b=40, l=40, r=40),
-        hovermode='x unified',
-        showlegend=False
-    )
-    
-    # Update axes styling
-    fig.update_xaxes(
-        showgrid=True,
-        gridwidth=1,
-        gridcolor='rgba(0,0,0,0.05)',
-        zeroline=False
-    )
 
-    fig.update_yaxes(
-        showgrid=True,
-        gridwidth=1,
-        gridcolor='rgba(0,0,0,0.05)',
-        zeroline=False
-    )
-    
-    return fig
-
-def find_recent_projects(directory, limit=10):
-    """Find and display recent projects"""
-    if not directory or not os.path.exists(directory):
+def ui_find_recent(directory, limit=10):
+    """UI handler: Find recent projects"""
+    if not directory or not os.path.exists(os.path.expanduser(directory)):
         return "<p style='color: #999; text-align: center; padding: 2rem;'>Please enter a valid directory path</p>"
 
     try:
-        projects, _ = safe_scan_directory(directory)
+        projects, _ = safe_scan_directory(os.path.expanduser(directory))
 
         if not projects:
             return "<p style='color: #999; text-align: center; padding: 2rem;'>No projects found</p>"
 
-        # Sort by modification time
         projects.sort(key=lambda p: os.path.getmtime(p.filepath), reverse=True)
         recent = projects[:limit]
 
-        # Analyze the recent projects
         for proj in recent:
             proj.analyze()
 
@@ -376,273 +763,93 @@ def find_recent_projects(directory, limit=10):
     except Exception as e:
         return f"<p style='color: #ff6b6b; padding: 2rem;'>Error: {str(e)}</p>"
 
-def handle_uploaded_files(files, analyze_all=False):
-    """Handle uploaded .als files and display analysis"""
+
+def ui_handle_uploads(files, analyze_all=False):
+    """UI handler: Process uploaded files"""
     if not files or len(files) == 0:
-        return "<p style='color: #999; text-align: center; padding: 2rem;'>Please upload some .als files</p>", None, []
+        return "<p style='color: #999; text-align: center; padding: 2rem;'>Please upload some .als files</p>"
 
     try:
         projects = []
-
-        # In Gradio 6, files is a list of file paths (strings)
-        # Handle both single file and list of files
         file_list = files if isinstance(files, list) else [files]
 
-        # Process each uploaded file
         for file_path in file_list:
+            if not file_path:
+                continue
             try:
-                # file_path is the path to the uploaded file
-                if not file_path:
-                    continue
-
-                print(f"Processing file: {file_path}")
                 proj = SafeAbletonProject(file_path)
-
-                # Analyze if requested
                 if analyze_all:
-                    print(f"Analyzing: {file_path}")
                     proj.analyze()
-
                 projects.append(proj)
-                print(f"Successfully processed: {proj.filename}")
             except Exception as e:
                 print(f"Error processing {file_path}: {e}")
-                import traceback
-                traceback.print_exc()
                 continue
 
         if not projects:
-            return "<p style='color: #999; text-align: center; padding: 2rem;'>No valid Ableton projects found in uploads</p>", None, []
+            return "<p style='color: #999; text-align: center; padding: 2rem;'>No valid Ableton projects found</p>"
 
-        print(f"Total projects processed: {len(projects)}")
-
-        # Generate cards
         cards = [generate_project_card_html(proj, analyze_all) for proj in projects]
         html = f'<div class="projects-grid">{"".join(cards)}</div>'
 
-        # Generate BPM chart if analyzed
-        chart = None
-        if analyze_all:
-            chart = create_bpm_chart(projects)
-
-        return html, chart, projects
+        return html
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return f"<p style='color: #ff6b6b; padding: 2rem;'>Error: {str(e)}</p>", None, []
+        return f"<p style='color: #ff6b6b; padding: 2rem;'>Error: {str(e)}</p>"
 
-def load_example_projects(analyze_all=False):
-    """Load pre-packaged example projects"""
-    # Check if examples directory exists
+
+def ui_load_examples(analyze_all=False):
+    """UI handler: Load example projects"""
     examples_dir = os.path.join(os.path.dirname(__file__), "examples")
 
     if not os.path.exists(examples_dir):
         return """
-        <div style='text-align: center; padding: 3rem; color: #666;'>
-            <h3 style='font-family: "Cormorant Garamond"; margin-bottom: 1rem;'>No Example Projects Found</h3>
-            <p>To use example projects, create an <code>examples/</code> directory and add .als files.</p>
-            <p style='margin-top: 1rem; font-size: 0.9em;'>For now, try uploading your own files or scanning a local directory!</p>
-        </div>
-        """, None, []
+        <p style='text-align: center; padding: 2rem; color: #999;'>No examples found. Upload .als files to test.</p>
+        """
 
     try:
         projects, _ = safe_scan_directory(examples_dir)
 
         if not projects:
-            return "<p style='color: #999; text-align: center; padding: 2rem;'>No example projects found in examples/ directory</p>", None, []
+            return "<p style='color: #999; text-align: center; padding: 2rem;'>No example projects found</p>"
 
-        # Analyze all example projects
         if analyze_all:
             for proj in projects:
                 proj.analyze()
 
-        # Generate cards
         cards = [generate_project_card_html(proj, analyze_all) for proj in projects]
         html = f'<div class="projects-grid">{"".join(cards)}</div>'
 
-        # Generate BPM chart if analyzed
-        chart = None
-        if analyze_all:
-            chart = create_bpm_chart(projects)
-
-        return html, chart, projects
+        return html
 
     except Exception as e:
-        return f"<p style='color: #ff6b6b; padding: 2rem;'>Error: {str(e)}</p>", None, []
+        return f"<p style='color: #ff6b6b; padding: 2rem;'>Error: {str(e)}</p>"
 
-def format_projects_as_context(projects):
-    """Format project data as context for Claude"""
-    if not projects:
-        return "No projects have been scanned yet."
 
-    context_parts = ["You are analyzing Ableton Live projects. Here's the data:\n"]
+# =============================================================================
+# BUILD THE GRADIO APP
+# =============================================================================
 
-    for i, proj in enumerate(projects, 1):
-        # Get plugin summary
-        plugin_summary = "None"
-        if proj.plugin_count > 0:
-            plugin_counts = {}
-            for _, plugin_name in proj.plugins:
-                plugin_counts[plugin_name] = plugin_counts.get(plugin_name, 0) + 1
-
-            plugin_list = [f"{plugin} (×{count})" if count > 1 else plugin
-                          for plugin, count in list(plugin_counts.items())[:10]]
-            plugin_summary = ", ".join(plugin_list)
-
-        # Calculate days since modification
-        try:
-            mod_time = os.path.getmtime(proj.filepath)
-            days_ago = (datetime.now().timestamp() - mod_time) / 86400
-            if days_ago < 1:
-                time_ago = "today"
-            elif days_ago < 2:
-                time_ago = "yesterday"
-            else:
-                time_ago = f"{int(days_ago)} days ago"
-        except:
-            time_ago = proj.last_modified
-
-        context_parts.append(f"""
-Project {i}: "{proj.filename.replace('.als', '')}"
-- BPM: {proj.bpm if proj.bpm else 'Unknown'}
-- Tracks: {proj.track_count} total ({proj.audio_track_count} audio, {proj.midi_track_count} MIDI)
-- Plugins: {plugin_summary}
-- Modified: {time_ago}
-- Size: {proj.size_mb} MB
-- Path: {proj.filepath}
-""")
-
-    context_parts.append("\nBased on this data, answer the user's question with specific recommendations and reasoning.")
-    return "".join(context_parts)
-
-def chat_with_claude(message, chat_history, projects_data):
-    """Send message to HuggingFace model with project context"""
-
-    # Check if API token exists
-    api_token = os.environ.get("HF_TOKEN")
-    if not api_token:
-        error_msg = """To use the AI assistant, you need to set up your HuggingFace token:
-
-1. Get your token from https://huggingface.co/settings/tokens
-2. Set the environment variable:
-   export HF_TOKEN='your-token-here'
-3. Restart the app
-
-The AI assistant will analyze your projects and provide personalized recommendations."""
-        chat_history.append((message, error_msg))
-        return chat_history
-
-    # Check if projects have been scanned
-    if not projects_data or len(projects_data) == 0:
-        chat_history.append((message, "Please scan a directory first so I can analyze your projects."))
-        return chat_history
-
-    try:
-        # Initialize HuggingFace client
-        client = InferenceClient(token=api_token)
-
-        # Format context
-        context = format_projects_as_context(projects_data)
-
-        # Build conversation history
-        messages = []
-
-        # Add system message with context
-        messages.append({
-            "role": "system",
-            "content": str(f"{context}\n\nYou are an AI assistant helping musicians analyze their Ableton Live projects. Provide specific, data-driven recommendations based on the project information above.")
-        })
-
-        # Add conversation history
-        for user_msg, assistant_msg in chat_history:
-            if user_msg and assistant_msg:  # Skip empty messages
-                messages.append({"role": "user", "content": str(user_msg)})
-                messages.append({"role": "assistant", "content": str(assistant_msg)})
-
-        # Add current message
-        messages.append({
-            "role": "user",
-            "content": str(message)
-        })
-
-        # Call HuggingFace API
-        # Using Qwen2.5-72B-Instruct - excellent for reasoning tasks
-        response = client.chat_completion(
-            messages=messages,
-            model="Qwen/Qwen2.5-72B-Instruct",
-            max_tokens=1024,
-            temperature=0.7
-        )
-
-        # Extract response text
-        assistant_message = response.choices[0].message.content
-
-        # Add to chat history
-        chat_history.append((message, str(assistant_message)))
-
-        return chat_history
-
-    except Exception as e:
-        error_msg = f"Error: {str(e)}\n\nPlease check your HF_TOKEN and try again. Make sure you have access to the model."
-        chat_history.append((message, error_msg))
-        return chat_history
-
-# Build the Gradio interface
-with gr.Blocks(title="Ableton Project Manager") as demo:
-    # State management
-    projects_state = gr.State([])
-
-    # Swiss grid lines
-    gr.HTML("""
-        <div class="grid-line grid-line-vertical" style="left: 20%;"></div>
-        <div class="grid-line grid-line-vertical" style="left: 40%;"></div>
-        <div class="grid-line grid-line-vertical" style="left: 60%;"></div>
-        <div class="grid-line grid-line-vertical" style="left: 80%;"></div>
-        <div class="grid-line grid-line-horizontal" style="top: 33%;"></div>
-        <div class="grid-line grid-line-horizontal" style="top: 66%;"></div>
-    """)
-
+with gr.Blocks(title="Ableton Project Manager · MCP Server") as demo:
     # Header
     gr.HTML('<h1 class="header">Ableton Project Manager</h1>')
     gr.HTML('<p class="subtitle">MCP Server · Project Analysis & Discovery</p>')
 
-    # Tabbed interface for different input methods
+    # Tabbed interface
     with gr.Tabs():
-        # Tab 1: Scan Local Directory
-        with gr.Tab("📁 Scan Local Directory"):
-            with gr.Group(elem_classes="input-section"):
-                with gr.Row():
-                    directory_input = gr.Textbox(
-                        label="Project Directory",
-                        placeholder="~/Music/Ableton/Projects",
-                        value=os.path.expanduser("~/Music/Ableton"),
-                        scale=3
-                    )
-                    local_analyze_checkbox = gr.Checkbox(
-                        label="Deep Analysis (slower, includes BPM/plugins)",
-                        value=False,
-                        scale=1
-                    )
-
-                with gr.Row():
-                    scan_btn = gr.Button("Scan Projects", variant="primary")
-                    recent_btn = gr.Button("Find Recent (10)", variant="secondary")
-
-        # Tab 2: Upload Files
-        with gr.Tab("📤 Upload Files"):
+        # Tab 1: Upload Files (primary for HF Spaces)
+        with gr.Tab("「Upload Files」"):
             with gr.Group(elem_classes="input-section"):
                 gr.Markdown("""
-                ### Upload Your Ableton Projects
-                Drag and drop your .als files here to analyze them instantly.
-                Perfect for testing without local setup!
+                ### Analyze Your Ableton Projects
+                Upload `.als` files to extract BPM, track counts, and plugin inventories.
                 """)
 
                 upload_files = gr.File(
                     file_count="multiple",
                     file_types=[".als"],
                     label="Drop .als files here",
-                    height=200
+                    height=180,
+                    elem_classes="upload-box"
                 )
 
                 upload_analyze_checkbox = gr.Checkbox(
@@ -652,119 +859,85 @@ with gr.Blocks(title="Ableton Project Manager") as demo:
 
                 upload_btn = gr.Button("Analyze Uploaded Files", variant="primary", size="lg")
 
-        # Tab 3: Example Projects
-        with gr.Tab("✨ Example Projects"):
+        # Tab 2: Example Projects
+        with gr.Tab("「Examples」"):
             with gr.Group(elem_classes="input-section"):
                 gr.Markdown("""
                 ### Try Pre-Loaded Examples
-                Instantly explore curated Ableton projects to see how the analysis works.
-                No upload or local files needed!
+                See how the analysis works with sample projects.
                 """)
 
                 examples_analyze_checkbox = gr.Checkbox(
-                    label="Deep Analysis (includes BPM/plugins)",
+                    label="Deep Analysis",
                     value=True
                 )
 
-                examples_btn = gr.Button("Load Example Projects", variant="primary", size="lg")
+                examples_btn = gr.Button("Load Examples", variant="primary", size="lg")
 
-    # Projects output (shared across all tabs)
+    # Output section
     projects_output = gr.HTML()
 
-    # AI Assistant section
-    with gr.Group(elem_classes="chatbot-section"):
-        gr.HTML('<h2 class="chat-title">AI Assistant</h2>')
-        chatbot = gr.Chatbot(
-            label="Ask about your projects",
-            height=400,
-            show_label=False
-        )
-        with gr.Row():
-            chat_input = gr.Textbox(
-                placeholder="Ask about your projects... (e.g., 'Which project should I finish first?')",
-                show_label=False,
-                scale=4
-            )
-            chat_btn = gr.Button("Send", variant="primary", scale=1)
+    # MCP Integration Info
+    gr.HTML("""
+    <div class="mcp-info">
+        <strong style="color: #3a3a4a; font-size: 0.95rem;">MCP Integration</strong>
+        <p style="color: #5a5a6a; margin: 0.75rem 0 1rem 0; line-height: 1.6;">
+            Exposes .als file metadata via <strong style="color: #4a4a5a;">Model Context Protocol</strong>. Connects to Claude Desktop, Cursor, or other MCP clients. Useful if you have hundreds of project files and have lost track of what's in them.
+        </p>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 1rem;">
+            <div>
+                <strong style="color: #4a4a5a; font-size: 0.8rem;">Available Tools</strong>
+                <ul style="margin: 0.5rem 0; padding-left: 1.25rem; color: #5a5a6a; font-size: 0.8rem; line-height: 1.6;">
+                    <li><code style="color: #4a4a5a;">mcp_scan_projects</code> — Discover .als files</li>
+                    <li><code style="color: #4a4a5a;">mcp_analyze_projects</code> — Deep metadata extraction</li>
+                    <li><code style="color: #4a4a5a;">mcp_find_recent_projects</code> — Sort by modification date</li>
+                    <li><code style="color: #4a4a5a;">mcp_analyze_uploaded_file</code> — Single file analysis</li>
+                </ul>
+            </div>
+            <div>
+                <strong style="color: #4a4a5a; font-size: 0.8rem;">What AI Can Extract</strong>
+                <ul style="margin: 0.5rem 0; padding-left: 1.25rem; color: #5a5a6a; font-size: 0.8rem; line-height: 1.6;">
+                    <li>BPM, track counts, arrangement length</li>
+                    <li>Full plugin inventory + CPU-heavy warnings</li>
+                    <li>Master chain device analysis</li>
+                    <li>Missing samples detection</li>
+                    <li>"Likely finished" completion assessment</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid rgba(90, 90, 110, 0.1); font-size: 0.75rem; color: #6a6a7a;">
+            <strong style="color: #5a5a6a;">Endpoint:</strong> <code style="color: #4a4a5a;">/gradio_api/mcp/sse</code> · 
+            Built with Gradio's native MCP support · 
+            <a href="https://modelcontextprotocol.io" target="_blank" style="color: #5a6a8a;">Learn about MCP →</a>
+        </div>
+    </div>
+    """)
 
-    # Stats section
-    with gr.Group(elem_classes="stats-section", visible=False) as stats_group:
-        gr.HTML('<h2 class="stats-title">Project Distribution</h2>')
-        bpm_chart = gr.Plot()
-
-    # Event handlers
-    def scan_with_chart(directory, analyze):
-        html, chart, projects = scan_and_display(directory, analyze)
-        if chart:
-            return html, chart, gr.update(visible=True), projects
-        return html, None, gr.update(visible=False), projects
-
-    def upload_with_chart(files, analyze):
-        html, chart, projects = handle_uploaded_files(files, analyze)
-        if chart:
-            return html, chart, gr.update(visible=True), projects
-        return html, None, gr.update(visible=False), projects
-
-    def examples_with_chart(analyze):
-        html, chart, projects = load_example_projects(analyze)
-        if chart:
-            return html, chart, gr.update(visible=True), projects
-        return html, None, gr.update(visible=False), projects
-
-    # Local directory scan handlers
-    scan_btn.click(
-        scan_with_chart,
-        inputs=[directory_input, local_analyze_checkbox],
-        outputs=[projects_output, bpm_chart, stats_group, projects_state]
-    )
-
-    recent_btn.click(
-        find_recent_projects,
-        inputs=[directory_input],
-        outputs=[projects_output]
-    )
-
-    # Upload handlers
-    upload_btn.click(
-        upload_with_chart,
-        inputs=[upload_files, upload_analyze_checkbox],
-        outputs=[projects_output, bpm_chart, stats_group, projects_state]
-    )
-
-    # Examples handler
-    examples_btn.click(
-        examples_with_chart,
-        inputs=[examples_analyze_checkbox],
-        outputs=[projects_output, bpm_chart, stats_group, projects_state]
-    )
-
-    # Chat event handler
-    def handle_chat(message, history, projects):
-        if not message.strip():
-            return history, ""
-        new_history = chat_with_claude(message, history, projects)
-        return new_history, ""
-
-    chat_btn.click(
-        handle_chat,
-        inputs=[chat_input, chatbot, projects_state],
-        outputs=[chatbot, chat_input]
-    )
-
-    chat_input.submit(
-        handle_chat,
-        inputs=[chat_input, chatbot, projects_state],
-        outputs=[chatbot, chat_input]
-    )
-    
     # Footer
     gr.HTML("""
         <div style="text-align: center; margin-top: 3rem; padding-top: 2rem; border-top: 1px solid rgba(0,0,0,0.08);">
-            <p style="font-size: 0.75rem; color: #999; letter-spacing: 0.05em; text-transform: uppercase;">
-                Built with MCP · Gradio 6 · Plotly
+            <p style="font-size: 0.75rem; color: #888; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 0.5rem;">
+                Built for MCP's 1st Birthday Hackathon · Gradio
+            </p>
+            <p style="font-size: 0.7rem; color: #999;">
+                by <a href="https://hnsk.site" target="_blank" style="color: #6a6a8a; text-decoration: none;">closestfriend™</a> · 
+                <a href="https://github.com/closestfriend" target="_blank" style="color: #6a6a8a; text-decoration: none;">GitHub</a>
             </p>
         </div>
     """)
 
+    # Event handlers
+    upload_btn.click(ui_handle_uploads, [upload_files, upload_analyze_checkbox], [projects_output])
+    examples_btn.click(ui_load_examples, [examples_analyze_checkbox], [projects_output])
+
+    # Register MCP-only API functions
+    gr.api(mcp_scan_projects)
+    gr.api(mcp_analyze_projects)
+    gr.api(mcp_find_recent_projects)
+    gr.api(mcp_analyze_uploaded_file)
+
+
 if __name__ == "__main__":
-    demo.launch(share=False, mcp_server=True)
+    demo.launch(mcp_server=True, theme=CUSTOM_THEME, css=CUSTOM_CSS)
