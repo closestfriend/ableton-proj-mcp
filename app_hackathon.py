@@ -631,6 +631,45 @@ def generate_project_card_html(project, analyzed=False):
         </div>
         """
     
+    # Missing samples section
+    missing_html = ""
+    if analyzed and hasattr(project, 'missing_samples') and project.missing_samples:
+        import os
+        import random
+        missing_id = f"missing_{random.randint(10000, 99999)}"
+        
+        sample_names = [os.path.basename(p) for p in project.missing_samples]
+        visible = sample_names[:5]
+        hidden = sample_names[5:]
+        
+        missing_list = ''.join([f'<div style="font-size: 0.7rem; color: #8a2a2a; padding: 0.15rem 0; border-bottom: 1px solid rgba(200,60,60,0.04); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{project.missing_samples[i]}">{name}</div>' for i, name in enumerate(visible)])
+        
+        if hidden:
+            hidden_html = ''.join([f'<div style="font-size: 0.7rem; color: #8a2a2a; padding: 0.15rem 0; border-bottom: 1px solid rgba(200,60,60,0.04); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{project.missing_samples[i+5]}">{name}</div>' for i, name in enumerate(hidden)])
+            missing_list += f'''
+            <div id="{missing_id}_hidden" style="display: none;">{hidden_html}</div>
+            <div id="{missing_id}_btn" class="track-expand-btn" style="color: #a22; font-weight: 500;" onclick="
+                var hidden = document.getElementById('{missing_id}_hidden');
+                var btn = document.getElementById('{missing_id}_btn');
+                if (hidden.style.display === 'none') {{
+                    hidden.style.display = 'block';
+                    btn.textContent = '▲ collapse';
+                }} else {{
+                    hidden.style.display = 'none';
+                    btn.textContent = '+{len(hidden)} more';
+                }}
+            ">+{len(hidden)} more</div>
+            '''
+        
+        missing_html = f"""
+        <div style="margin-top: 0.75rem; padding: 0.75rem; background: rgba(200, 60, 60, 0.04); border-radius: 8px; border: 1px solid rgba(200, 60, 60, 0.1);">
+            <div style="font-size: 0.65rem; color: #8a2a2a; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.5rem; font-weight: 600; display: flex; align-items: center;">
+                <span style="margin-right: 0.4rem;">⚠️</span> Missing Samples ({len(project.missing_samples)})
+            </div>
+            {missing_list}
+        </div>
+        """
+    
     # Status badges
     badges_html = ""
     if analyzed:
@@ -688,6 +727,7 @@ def generate_project_card_html(project, analyzed=False):
             </div>
         </div>
         {tracks_html}
+        {missing_html}
         {master_html}
         {markers_html}
         {plugin_html}
