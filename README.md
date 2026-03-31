@@ -4,7 +4,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![MCP](https://img.shields.io/badge/MCP-1.0-green.svg)](https://modelcontextprotocol.io)
 
-MCP server that parses Ableton Live .als files. Extracts BPM, track structure, plugin inventory, device chains, sample references. Runs locally - nothing leaves your machine.
+Parses Ableton Live .als XML files to make project metadata queryable via natural language. Extracts BPM, track structure, plugin inventory, sample references, device chains, and more, entirely locally through MCP.
 
 Pairs well with the [filesystem MCP server](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem) for directory browsing.
 
@@ -24,12 +24,12 @@ Requires Python 3.10+ and [uv](https://github.com/astral-sh/uv).
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+Add the server to your MCP client's configuration file (e.g., `claude_desktop_config.json`, Cursor settings, or your custom client):
 
 ```json
 {
   "mcpServers": {
-    "music-manager": {
+    "ableton-manager": {
       "command": "uv",
       "args": [
         "tool",
@@ -43,7 +43,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 }
 ```
 
-Restart Claude Desktop.
+Note: Restart your MCP client after updating the configuration.
 
 ## Available Tools
 
