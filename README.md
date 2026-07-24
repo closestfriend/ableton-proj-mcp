@@ -8,6 +8,14 @@ Parses Ableton Live .als XML files to make project metadata queryable via natura
 
 Pairs well with the [filesystem MCP server](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem) for directory browsing.
 
+> **Status: actively developed** — contributions and issue reports are welcome.
+> The first version was built as a submission for Hugging Face's MCP 1st Birthday
+> Hackathon; it has since grown into the tool I use on my own project library.
+>
+> **Related:** this server analyzes `.als` project files offline. To control a
+> *running* Ableton Live session via MCP, see
+> [ableton-mcp](https://github.com/closestfriend/ableton-mcp).
+
 ## Use Cases
 
 - **Missing samples**: Extracts file paths from project XML. Returns structured JSON for batch relinking.
@@ -236,6 +244,15 @@ SCAN_DEPTH = 3           # Maximum subdirectory depth
 **Missing plugin names:** Ensure project is from Ableton Live 11+
 
 **Large file skipped:** Increase `MAX_FILE_SIZE_MB` or analyze individually
+
+## Repository layout
+
+- `src/music_manager_mcp/` — the MCP server package (canonical entry point: `music-manager-mcp`)
+- `app.py`, `music_mcp.py`, `requirements-gradio.txt` — the Gradio app from the original
+  Hugging Face Space (kept at root, as Spaces requires)
+- `music_mcp_enhanced.py`, `enhanced_analyzer.py`, `switch_version.py` — earlier
+  enhanced-analyzer lineage, still used by the test scripts
+- `docs/` — design notes and UI mockups
 
 ## Contributing
 
