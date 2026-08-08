@@ -5,7 +5,11 @@ description = "MCP server for managing and analyzing Ableton projects"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "mcp>=1.0.0",
+    # Upper bound is load-bearing: this server uses the mcp 1.x low-level API
+    # (`from mcp.server import Server` + @server.list_tools/@server.call_tool).
+    # mcp 2.0 dropped those decorators, so an unpinned >=1.0.0 silently
+    # resolved to 2.x and broke startup with AttributeError.
+    "mcp>=1.0.0,<2.0.0",
 ]
 
 [project.scripts]
