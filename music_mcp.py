@@ -13,6 +13,7 @@ import gzip
 import tempfile
 import datetime
 import hashlib
+import sys
 from pathlib import Path
 try:
     import xml.etree.ElementTree as ET
@@ -24,6 +25,10 @@ server = Server("music-manager")
 # SAFETY LIMITS - Prevent scanning massive directories
 MAX_FILES_TO_SCAN = 100  # Stop after this many .als files
 MAX_FILE_SIZE_MB = 50    # Skip files larger than this
+MAX_XML_BYTES = 250 * 1024 * 1024  # Cap on DECOMPRESSED size (MAX_FILE_SIZE_MB only limits the gzip)
+# Hosted deployments (the public Space) set this False: sample paths come from an
+# untrusted upload, so checking them against the server's disk would leak what exists there.
+VERIFY_SAMPLES_ON_DISK = True
 SCAN_DEPTH = 3           # Only go 3 folders deep
 TIMEOUT_SECONDS = 30     # Max time for any operation
 
@@ -101,7 +106,8 @@ class SafeAbletonProject:
         try:
             return self._parse_als_file()
         except Exception as e:
-            self.error = str(e)
+            print(f"analyze() failed: {e!r}", file=sys.stderr)  # detail stays in server logs
+            self.error = "Could not analyze project file"
             return False
     
     def _parse_als_file(self):
@@ -113,7 +119,10 @@ class SafeAbletonProject:
         try:
             # Decompress directly to memory (faster, no temp file needed)
             with gzip.open(self.filepath, 'rb') as f:
-                xml_content = f.read()
+                xml_content = f.read(MAX_XML_BYTES + 1)
+            if len(xml_content) > MAX_XML_BYTES:
+                self.error = "Project is too large to analyze"
+                return False
             
             root = ET.fromstring(xml_content)
             
@@ -137,7 +146,8 @@ class SafeAbletonProject:
             return True
             
         except Exception as e:
-            self.error = str(e)
+            print(f"_parse_als_file failed: {e!r}", file=sys.stderr)
+            self.error = "Not a valid Ableton project file"
             return False
 
     def _extract_bpm(self, root):
@@ -443,7 +453,7 @@ class SafeAbletonProject:
                     sample_paths.append(path)
                     
                     # Check if file exists (for local paths)
-                    if not path.startswith(("http://", "https://")):
+                    if VERIFY_SAMPLES_ON_DISK and not path.startswith(("http://", "https://")):
                         # Try to resolve the path
                         if not Path(path).exists():
                             # Also check relative to project
