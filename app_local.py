@@ -8,6 +8,7 @@ Extracts BPM, track counts, plugin inventories, and project metadata from .als f
 """
 
 import gradio as gr
+import html as _html
 import os
 from pathlib import Path
 from music_mcp import SafeAbletonProject, safe_scan_directory, MAX_FILES_TO_SCAN, MAX_FILE_SIZE_MB, SCAN_DEPTH
@@ -540,7 +541,7 @@ def generate_project_card_html(project, analyzed=False):
         
         plugin_tags = []
         for plugin, count in list(plugin_counts.items())[:5]:
-            display = f"{plugin} × {count}" if count > 1 else plugin
+            display = _html.escape(f"{plugin} × {count}" if count > 1 else plugin)
             plugin_tags.append(f'<span style="padding: 0.25rem 0.75rem; background: rgba(100, 100, 120, 0.08); border-radius: 6px; font-size: 0.7rem; color: #5a5a6a; margin-right: 0.5rem; margin-bottom: 0.5rem; display: inline-block;">{display}</span>')
 
         plugin_html = f"""
@@ -558,6 +559,7 @@ def generate_project_card_html(project, analyzed=False):
         master_devices = ' → '.join(project.master_chain[:6])
         if len(project.master_chain) > 6:
             master_devices += f' (+{len(project.master_chain) - 6})'
+        master_devices = _html.escape(master_devices)
         master_html = f"""
         <div style="margin-top: 0.75rem;">
             <div style="font-size: 0.65rem; color: #999; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.25rem; font-weight: 500;">Master Chain</div>
@@ -568,7 +570,7 @@ def generate_project_card_html(project, analyzed=False):
     # Markers section
     markers_html = ""
     if analyzed and hasattr(project, 'markers') and project.markers:
-        marker_tags = [f'<span style="padding: 0.15rem 0.5rem; background: rgba(80, 120, 100, 0.12); border-radius: 4px; font-size: 0.65rem; color: #4a6a5a; margin-right: 0.4rem; display: inline-block;">{m}</span>' for m in project.markers[:6]]
+        marker_tags = [f'<span style="padding: 0.15rem 0.5rem; background: rgba(80, 120, 100, 0.12); border-radius: 4px; font-size: 0.65rem; color: #4a6a5a; margin-right: 0.4rem; display: inline-block;">{_html.escape(m)}</span>' for m in project.markers[:6]]
         markers_html = f"""
         <div style="margin-top: 0.75rem;">
             <div style="font-size: 0.65rem; color: #999; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.25rem; font-weight: 500;">Markers</div>
@@ -593,10 +595,10 @@ def generate_project_card_html(project, analyzed=False):
             hidden = tracks[6:]
             list_id = f"{card_id}_{track_type}"
             
-            html = ''.join([f'<div style="font-size: 0.7rem; color: #6a6a7a; padding: 0.15rem 0; border-bottom: 1px solid rgba(0,0,0,0.04);">{name}</div>' for name in visible])
+            html = ''.join([f'<div style="font-size: 0.7rem; color: #6a6a7a; padding: 0.15rem 0; border-bottom: 1px solid rgba(0,0,0,0.04);">{_html.escape(name)}</div>' for name in visible])
             
             if hidden:
-                hidden_html = ''.join([f'<div style="font-size: 0.7rem; color: #6a6a7a; padding: 0.15rem 0; border-bottom: 1px solid rgba(0,0,0,0.04);">{name}</div>' for name in hidden])
+                hidden_html = ''.join([f'<div style="font-size: 0.7rem; color: #6a6a7a; padding: 0.15rem 0; border-bottom: 1px solid rgba(0,0,0,0.04);">{_html.escape(name)}</div>' for name in hidden])
                 html += f'''
                 <div id="{list_id}_hidden" style="display: none;">{hidden_html}</div>
                 <div id="{list_id}_btn" class="track-expand-btn" onclick="
@@ -642,10 +644,10 @@ def generate_project_card_html(project, analyzed=False):
         visible = sample_names[:5]
         hidden = sample_names[5:]
         
-        missing_list = ''.join([f'<div style="font-size: 0.7rem; color: #8a2a2a; padding: 0.15rem 0; border-bottom: 1px solid rgba(200,60,60,0.04); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{project.missing_samples[i]}">{name}</div>' for i, name in enumerate(visible)])
+        missing_list = ''.join([f'<div style="font-size: 0.7rem; color: #8a2a2a; padding: 0.15rem 0; border-bottom: 1px solid rgba(200,60,60,0.04); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{_html.escape(project.missing_samples[i])}">{_html.escape(name)}</div>' for i, name in enumerate(visible)])
         
         if hidden:
-            hidden_html = ''.join([f'<div style="font-size: 0.7rem; color: #8a2a2a; padding: 0.15rem 0; border-bottom: 1px solid rgba(200,60,60,0.04); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{project.missing_samples[i+5]}">{name}</div>' for i, name in enumerate(hidden)])
+            hidden_html = ''.join([f'<div style="font-size: 0.7rem; color: #8a2a2a; padding: 0.15rem 0; border-bottom: 1px solid rgba(200,60,60,0.04); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{_html.escape(project.missing_samples[i+5])}">{_html.escape(name)}</div>' for i, name in enumerate(hidden)])
             missing_list += f'''
             <div id="{missing_id}_hidden" style="display: none;">{hidden_html}</div>
             <div id="{missing_id}_btn" class="track-expand-btn" style="color: #a22; font-weight: 500;" onclick="
@@ -698,7 +700,7 @@ def generate_project_card_html(project, analyzed=False):
     
     return f"""
     <div class="project-card">
-        <h3 class="project-title">{project.filename.replace('.als', '')}</h3>
+        <h3 class="project-title">{_html.escape(project.filename.replace('.als', ''))}</h3>
         {badges_html}
         <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; margin: 1rem 0;">
             <div>

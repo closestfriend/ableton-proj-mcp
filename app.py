@@ -8,11 +8,60 @@ Extracts BPM, track counts, plugin inventories, and project metadata from .als f
 """
 
 import gradio as gr
+import html as _html
 import os
+import sys
 from pathlib import Path
+import music_mcp
 from music_mcp import SafeAbletonProject, safe_scan_directory, MAX_FILES_TO_SCAN, MAX_FILE_SIZE_MB, SCAN_DEPTH
 from datetime import datetime
 from typing import Optional
+from gradio.utils import get_upload_folder
+
+# =============================================================================
+# HOSTED-SPACE SAFETY
+# The MCP tools below are reachable by anonymous callers and used to take raw
+# server-side paths. Anything a caller names must now resolve inside one of these
+# roots; everything else gets the same generic answer, so "missing", "exists but
+# not allowed" and "wrong type" can't be told apart.
+# =============================================================================
+
+EXAMPLES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "examples")
+DENIED_MSG = "Path not found or not allowed. On this Space, only uploaded files and the bundled examples can be analyzed."
+
+# Sample paths inside an uploaded .als describe the uploader's machine, not this server.
+music_mcp.VERIFY_SAMPLES_ON_DISK = False
+
+
+def _resolve_allowed(path, want_dir):
+    """Return the real path if it is an allowed .als file (or examples folder), else None.
+
+    Directory scans are limited to the bundled examples: the upload cache holds other
+    visitors' files, so it must never be listable. Single files may also come from the
+    upload cache (the only way to reach a file you uploaded yourself).
+    """
+    if not isinstance(path, str) or not path or "\x00" in path:
+        return None
+    real = os.path.realpath(path)  # resolves "..", "~"-less relative paths and symlinks first
+    roots = [EXAMPLES_DIR] if want_dir else [EXAMPLES_DIR, get_upload_folder()]
+    if not any(_is_within(real, os.path.realpath(root)) for root in roots):
+        return None
+    if want_dir:
+        return real if os.path.isdir(real) else None
+    return real if os.path.isfile(real) and real.lower().endswith(".als") else None
+
+
+def _is_within(path, root):
+    try:
+        return os.path.commonpath([path, root]) == root
+    except ValueError:  # e.g. different drives
+        return False
+
+
+def _generic_error(exc):
+    """Log the real exception server-side; hand callers a fixed message."""
+    print(f"tool error: {exc!r}", file=sys.stderr)
+    return "Analysis failed"
 
 # =============================================================================
 # MCP TOOL FUNCTIONS (exposed to LLMs via gr.api())
@@ -40,13 +89,9 @@ def mcp_scan_projects(directory: str) -> dict:
     if not directory:
         return {"error": "No directory provided", "projects": [], "count": 0}
     
-    expanded_path = os.path.expanduser(directory)
-    
-    if not os.path.exists(expanded_path):
-        return {"error": f"Directory does not exist: {expanded_path}", "projects": [], "count": 0}
-    
-    if not os.path.isdir(expanded_path):
-        return {"error": f"Path is not a directory: {expanded_path}", "projects": [], "count": 0}
+    expanded_path = _resolve_allowed(directory, want_dir=True)
+    if expanded_path is None:
+        return {"error": DENIED_MSG, "projects": [], "count": 0}
     
     try:
         projects, hit_limit = safe_scan_directory(expanded_path)
@@ -64,7 +109,7 @@ def mcp_scan_projects(directory: str) -> dict:
             ],
             "count": len(projects),
             "hit_limit": hit_limit,
-            "scanned_directory": expanded_path,
+            "scanned_directory": directory,
             "limits": {
                 "max_files": MAX_FILES_TO_SCAN,
                 "max_file_size_mb": MAX_FILE_SIZE_MB,
@@ -72,7 +117,7 @@ def mcp_scan_projects(directory: str) -> dict:
             }
         }
     except Exception as e:
-        return {"error": str(e), "projects": [], "count": 0}
+        return {"error": _generic_error(e), "projects": [], "count": 0}
 
 
 def mcp_analyze_projects(project_paths: list[str]) -> dict:
@@ -111,12 +156,13 @@ def mcp_analyze_projects(project_paths: list[str]) -> dict:
     errors = []
     
     for path in project_paths:
-        if not os.path.exists(path):
-            errors.append({"path": path, "error": "File not found"})
+        safe_path = _resolve_allowed(path, want_dir=False)
+        if safe_path is None:
+            errors.append({"path": path, "error": DENIED_MSG})
             continue
         
         try:
-            proj = SafeAbletonProject(path)
+            proj = SafeAbletonProject(safe_path)
             success = proj.analyze()
             
             plugin_summary = {}
@@ -163,7 +209,7 @@ def mcp_analyze_projects(project_paths: list[str]) -> dict:
             results.append(result)
             
         except Exception as e:
-            errors.append({"path": path, "error": str(e)})
+            errors.append({"path": path, "error": _generic_error(e)})
     
     return {
         "projects": results,
@@ -192,10 +238,9 @@ def mcp_find_recent_projects(directory: str, limit: int = 10) -> dict:
     if not directory:
         return {"error": "No directory provided", "projects": [], "count": 0}
     
-    expanded_path = os.path.expanduser(directory)
-    
-    if not os.path.exists(expanded_path):
-        return {"error": f"Directory does not exist: {expanded_path}", "projects": [], "count": 0}
+    expanded_path = _resolve_allowed(directory, want_dir=True)
+    if expanded_path is None:
+        return {"error": DENIED_MSG, "projects": [], "count": 0}
     
     limit = min(max(1, limit), 20)
     
@@ -203,7 +248,7 @@ def mcp_find_recent_projects(directory: str, limit: int = 10) -> dict:
         projects, _ = safe_scan_directory(expanded_path)
         
         if not projects:
-            return {"projects": [], "count": 0, "scanned_directory": expanded_path}
+            return {"projects": [], "count": 0, "scanned_directory": directory}
         
         projects.sort(key=lambda p: os.path.getmtime(p.filepath), reverse=True)
         recent = projects[:limit]
@@ -255,11 +300,11 @@ def mcp_find_recent_projects(directory: str, limit: int = 10) -> dict:
             "count": len(results),
             "wip_count": wip_count,
             "finished_count": finished_count,
-            "scanned_directory": expanded_path
+            "scanned_directory": directory
         }
         
     except Exception as e:
-        return {"error": str(e), "projects": [], "count": 0}
+        return {"error": _generic_error(e), "projects": [], "count": 0}
 
 
 def mcp_analyze_uploaded_file(file_path: str) -> dict:
@@ -283,11 +328,12 @@ def mcp_analyze_uploaded_file(file_path: str) -> dict:
     if not file_path:
         return {"error": "No file provided"}
     
-    if not os.path.exists(file_path):
-        return {"error": f"File not found: {file_path}"}
+    safe_path = _resolve_allowed(file_path, want_dir=False)
+    if safe_path is None:
+        return {"error": DENIED_MSG}
     
     try:
-        proj = SafeAbletonProject(file_path)
+        proj = SafeAbletonProject(safe_path)
         success = proj.analyze()
         
         plugin_summary = {}
@@ -334,7 +380,7 @@ def mcp_analyze_uploaded_file(file_path: str) -> dict:
         return result
         
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": _generic_error(e)}
 
 
 # =============================================================================
@@ -558,7 +604,7 @@ def generate_project_card_html(project, analyzed=False):
         
         plugin_tags = []
         for plugin, count in list(plugin_counts.items())[:5]:
-            display = f"{plugin} × {count}" if count > 1 else plugin
+            display = _html.escape(f"{plugin} × {count}" if count > 1 else plugin)
             plugin_tags.append(f'<span style="padding: 0.25rem 0.75rem; background: rgba(100, 100, 120, 0.08); border-radius: 6px; font-size: 0.7rem; color: #5a5a6a; margin-right: 0.5rem; margin-bottom: 0.5rem; display: inline-block;">{display}</span>')
 
         plugin_html = f"""
@@ -576,6 +622,7 @@ def generate_project_card_html(project, analyzed=False):
         master_devices = ' → '.join(project.master_chain[:6])
         if len(project.master_chain) > 6:
             master_devices += f' (+{len(project.master_chain) - 6})'
+        master_devices = _html.escape(master_devices)
         master_html = f"""
         <div style="margin-top: 0.75rem;">
             <div style="font-size: 0.65rem; color: #999; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.25rem; font-weight: 500;">Master Chain</div>
@@ -586,7 +633,7 @@ def generate_project_card_html(project, analyzed=False):
     # Markers section
     markers_html = ""
     if analyzed and hasattr(project, 'markers') and project.markers:
-        marker_tags = [f'<span style="padding: 0.15rem 0.5rem; background: rgba(80, 120, 100, 0.12); border-radius: 4px; font-size: 0.65rem; color: #4a6a5a; margin-right: 0.4rem; display: inline-block;">{m}</span>' for m in project.markers[:6]]
+        marker_tags = [f'<span style="padding: 0.15rem 0.5rem; background: rgba(80, 120, 100, 0.12); border-radius: 4px; font-size: 0.65rem; color: #4a6a5a; margin-right: 0.4rem; display: inline-block;">{_html.escape(m)}</span>' for m in project.markers[:6]]
         markers_html = f"""
         <div style="margin-top: 0.75rem;">
             <div style="font-size: 0.65rem; color: #999; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.25rem; font-weight: 500;">Markers</div>
@@ -611,10 +658,10 @@ def generate_project_card_html(project, analyzed=False):
             hidden = tracks[6:]
             list_id = f"{card_id}_{track_type}"
             
-            html = ''.join([f'<div style="font-size: 0.7rem; color: #6a6a7a; padding: 0.15rem 0; border-bottom: 1px solid rgba(0,0,0,0.04);">{name}</div>' for name in visible])
+            html = ''.join([f'<div style="font-size: 0.7rem; color: #6a6a7a; padding: 0.15rem 0; border-bottom: 1px solid rgba(0,0,0,0.04);">{_html.escape(name)}</div>' for name in visible])
             
             if hidden:
-                hidden_html = ''.join([f'<div style="font-size: 0.7rem; color: #6a6a7a; padding: 0.15rem 0; border-bottom: 1px solid rgba(0,0,0,0.04);">{name}</div>' for name in hidden])
+                hidden_html = ''.join([f'<div style="font-size: 0.7rem; color: #6a6a7a; padding: 0.15rem 0; border-bottom: 1px solid rgba(0,0,0,0.04);">{_html.escape(name)}</div>' for name in hidden])
                 html += f'''
                 <div id="{list_id}_hidden" style="display: none;">{hidden_html}</div>
                 <div id="{list_id}_btn" class="track-expand-btn" onclick="
@@ -660,10 +707,10 @@ def generate_project_card_html(project, analyzed=False):
         visible = sample_names[:5]
         hidden = sample_names[5:]
         
-        missing_list = ''.join([f'<div style="font-size: 0.7rem; color: #8a2a2a; padding: 0.15rem 0; border-bottom: 1px solid rgba(200,60,60,0.04); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{project.missing_samples[i]}">{name}</div>' for i, name in enumerate(visible)])
+        missing_list = ''.join([f'<div style="font-size: 0.7rem; color: #8a2a2a; padding: 0.15rem 0; border-bottom: 1px solid rgba(200,60,60,0.04); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{_html.escape(project.missing_samples[i])}">{_html.escape(name)}</div>' for i, name in enumerate(visible)])
         
         if hidden:
-            hidden_html = ''.join([f'<div style="font-size: 0.7rem; color: #8a2a2a; padding: 0.15rem 0; border-bottom: 1px solid rgba(200,60,60,0.04); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{project.missing_samples[i+5]}">{name}</div>' for i, name in enumerate(hidden)])
+            hidden_html = ''.join([f'<div style="font-size: 0.7rem; color: #8a2a2a; padding: 0.15rem 0; border-bottom: 1px solid rgba(200,60,60,0.04); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{_html.escape(project.missing_samples[i+5])}">{_html.escape(name)}</div>' for i, name in enumerate(hidden)])
             missing_list += f'''
             <div id="{missing_id}_hidden" style="display: none;">{hidden_html}</div>
             <div id="{missing_id}_btn" class="track-expand-btn" style="color: #a22; font-weight: 500;" onclick="
@@ -716,7 +763,7 @@ def generate_project_card_html(project, analyzed=False):
     
     return f"""
     <div class="project-card">
-        <h3 class="project-title">{project.filename.replace('.als', '')}</h3>
+        <h3 class="project-title">{_html.escape(project.filename.replace('.als', ''))}</h3>
         {badges_html}
         <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; margin: 1rem 0;">
             <div>
@@ -777,7 +824,7 @@ def ui_scan_and_display(directory, analyze_all=False):
         return html
 
     except Exception as e:
-        return f"<p style='color: #ff6b6b; padding: 2rem;'>Error: {str(e)}</p>"
+        return f"<p style='color: #ff6b6b; padding: 2rem;'>{_generic_error(e)}</p>"
 
 
 def ui_find_recent(directory, limit=10):
@@ -801,7 +848,7 @@ def ui_find_recent(directory, limit=10):
         return f'<div class="projects-grid">{"".join(cards)}</div>'
 
     except Exception as e:
-        return f"<p style='color: #ff6b6b; padding: 2rem;'>Error: {str(e)}</p>"
+        return f"<p style='color: #ff6b6b; padding: 2rem;'>{_generic_error(e)}</p>"
 
 
 def ui_handle_uploads(files, analyze_all=False):
@@ -834,7 +881,7 @@ def ui_handle_uploads(files, analyze_all=False):
         return html
 
     except Exception as e:
-        return f"<p style='color: #ff6b6b; padding: 2rem;'>Error: {str(e)}</p>"
+        return f"<p style='color: #ff6b6b; padding: 2rem;'>{_generic_error(e)}</p>"
 
 
 def ui_load_examples(analyze_all=False):
@@ -862,7 +909,7 @@ def ui_load_examples(analyze_all=False):
         return html
 
     except Exception as e:
-        return f"<p style='color: #ff6b6b; padding: 2rem;'>Error: {str(e)}</p>"
+        return f"<p style='color: #ff6b6b; padding: 2rem;'>{_generic_error(e)}</p>"
 
 
 # =============================================================================
