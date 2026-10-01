@@ -4,9 +4,17 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![MCP](https://img.shields.io/badge/MCP-1.0-green.svg)](https://modelcontextprotocol.io)
 
-MCP server that parses Ableton Live .als files. Extracts BPM, track structure, plugin inventory, device chains, sample references. Runs locally - nothing leaves your machine.
+Parses Ableton Live .als XML files to make project metadata queryable via natural language. Extracts BPM, track structure, plugin inventory, sample references, device chains, and more, entirely locally through MCP.
 
 Pairs well with the [filesystem MCP server](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem) for directory browsing.
+
+> **Status: actively developed** — contributions and issue reports are welcome.
+> The first version was built as a submission for Hugging Face's MCP 1st Birthday
+> Hackathon; it has since grown into the tool I use on my own project library.
+>
+> **Related:** this server analyzes `.als` project files offline. To control a
+> *running* Ableton Live session via MCP, see
+> [ableton-mcp](https://github.com/closestfriend/ableton-mcp).
 
 ## Use Cases
 
@@ -24,12 +32,12 @@ Requires Python 3.10+ and [uv](https://github.com/astral-sh/uv).
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+Add the server to your MCP client's configuration file (e.g., `claude_desktop_config.json`, Cursor settings, or your custom client):
 
 ```json
 {
   "mcpServers": {
-    "music-manager": {
+    "ableton-manager": {
       "command": "uv",
       "args": [
         "tool",
@@ -43,7 +51,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 }
 ```
 
-Restart Claude Desktop.
+Note: Restart your MCP client after updating the configuration.
 
 ## Available Tools
 
@@ -236,6 +244,15 @@ SCAN_DEPTH = 3           # Maximum subdirectory depth
 **Missing plugin names:** Ensure project is from Ableton Live 11+
 
 **Large file skipped:** Increase `MAX_FILE_SIZE_MB` or analyze individually
+
+## Repository layout
+
+- `src/music_manager_mcp/` — the MCP server package (canonical entry point: `music-manager-mcp`)
+- `app.py`, `music_mcp.py`, `requirements-gradio.txt` — the Gradio app from the original
+  Hugging Face Space (kept at root, as Spaces requires)
+- `music_mcp_enhanced.py`, `enhanced_analyzer.py`, `switch_version.py` — earlier
+  enhanced-analyzer lineage, still used by the test scripts
+- `docs/` — design notes and UI mockups
 
 ## Contributing
 
